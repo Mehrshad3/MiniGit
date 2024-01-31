@@ -20,7 +20,6 @@ char proj_dir[MAX_PATH_LENGTH];
 void print_command(int argc, char * const argv[]);
 
 int run_init(int argc, char * const argv[]);
-int create_files();
 
 int run_add(int argc, char * const argv[]);
 int add_to_staging(char *filepath);
@@ -98,19 +97,15 @@ int find_minigit_directory() {
 int run_init(int argc, char * const argv[]) {
     if (find_minigit_directory()) return 1;
     // return to the initial cwd
-    if (chdir(cwd) != 0) return 1;
-    if (!proj_dir[0]) {
-        if (CreateDirectory(".MiniGit", NULL) == 0) return 1;
-        if (!SetFileAttributes(".MiniGit", FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN)) return 1;
-        strcpy(proj_dir, cwd);
-        return create_files();
-    } else {
+    if (proj_dir[0]) {
         perror("MiniGit repository has already initialized.");
+        return 0;
     }
-    return 0;
-}
+    if (CreateDirectory(".MiniGit", NULL) == 0) return 1;
+    if (!SetFileAttributes(".MiniGit", FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN)) return 1;
+    strcpy(proj_dir, cwd);
 
-int create_files() {
+    // Former create_files function
     FILE *file = fopen(".MiniGit/config", "w");
     if (file == NULL) return 1;
 
@@ -478,7 +473,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    print_command(argc, argv);
+    print_command(argc, argv); // Not officially, just used for developing, and debuging
 
     if (strcmp(argv[1], "init") == 0) {
         return run_init(argc, argv);
