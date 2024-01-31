@@ -59,8 +59,6 @@ int run_init(int argc, char * const argv[]) {
     do {
         drive_reached = drive_reached || (strcmp(tmp_cwd + 1, ":\\") == 0);
         char trash;
-        scanf("%c", &trash);
-        printf("tmp_cwd = %s\n", tmp_cwd);
         // find .neogit
         WIN32_FIND_DATA fdFile; // this data type stores file attributes
         strcpy(spath, tmp_cwd);
@@ -94,41 +92,40 @@ int run_init(int argc, char * const argv[]) {
         if (CreateDirectory(".MiniGit", NULL) == 0) return 1;
         if (!SetFileAttributes(".MiniGit", FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN)) return 1;
 
-        return 0;//create_configs("mohsen", "mohsenghasemi8156@gmail.com");
+        return create_configs("mohsen", "mohsenghasemi8156@gmail.com");
     } else {
         perror("neogit repository has already initialized.");
     }
     return 0;
 }
 
-/*int create_configs(char *username, char *email) {
-    FILE *file = fopen(".neogit/config", "w");
+int create_configs(char *username, char *email) {
+    FILE *file = fopen(".MiniGit/config", "w");
     if (file == NULL) return 1;
 
-    fprintf(file, "username: %s\n", username);
-    fprintf(file, "email: %s\n", email);
+    if (username) fprintf(file, "username: %s\n", username);
+    if (email) fprintf(file, "email: %s\n", email);
     fprintf(file, "last_commit_ID: %d\n", 0);
     fprintf(file, "current_commit_ID: %d\n", 0);
     fprintf(file, "branch: %s", "master");
 
     fclose(file);
-    
     // create commits folder
-    if (mkdir(".neogit/commits", 0755) != 0) return 1;
+    if (mkdir(".MiniGit/commits") != 0) return 1;
 
     // create files folder
-    if (mkdir(".neogit/files", 0755) != 0) return 1;
+    if (mkdir(".MiniGit/files") != 0) return 1;
 
-    file = fopen(".neogit/staging", "w");
+    file = fopen(".MiniGit/staging", "w");
     fclose(file);
 
-    file = fopen(".neogit/tracks", "w");
+    file = fopen(".MiniGit/tracks", "w");
     fclose(file);
 
     return 0;
 }
 
-int run_add(int argc, char *const argv[]) {
+/*int run_add(int argc, char *const argv[]) {
     // TODO: handle command in non-root directories 
     if (argc < 3) {
         perror("please specify a file");
