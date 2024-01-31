@@ -98,7 +98,7 @@ int find_minigit_directory() { // TODO: complete this function
         FindClose(handle);
 
         // change cwd to parent
-        if (!drive_reached) {
+        if (!drive_reached && !exists) {
             if (chdir("..") != 0) return 1;
         }
 
