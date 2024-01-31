@@ -12,6 +12,8 @@
 #define MAX_MESSAGE_LENGTH 1000
 #define MAX_PATH_LENGTH 1024 // literally it's 260, IDK why I'm setting this.
 
+#define IS_WHITE_SPACE(_C) (_C == ' ' || _C == '\t' || _C == '\n' || _C == '\r' || _C == '\f' || _C == '\v')
+
 #define debug(x) printf("%s", x);
 
 char cwd[MAX_PATH_LENGTH];
@@ -47,13 +49,29 @@ void print_command(int argc, char * const argv[]) {
     fprintf(stdout, "\n");
 }
 
-char* read_from_minigit(char* path, char* element) {
+int read_from_minigit(char* path, char* element, char line[MAX_LINE_LENGTH]) {
+    int number_of_dots = 0;
     char fullpath[MAX_PATH_LENGTH];
     sprintf(fullpath , ".Minigit\\%s", path);
-    return NULL;
+    unsigned long attribute = GetFileAttributes(fullpath);
+    if (attribute == INVALID_FILE_ATTRIBUTES) return 1;
+    char* token = strtok(element, ".");
+    while (token) {
+        for (int i = number_of_dots - 1; i >= 0; i--) {
+            if (line[i] != '\t') return 1;
+        }
+        if (strncmp(line + number_of_dots, token, strlen(token)) == 0) {
+            if (line[number_of_dots + strlen(token)] == ':' || line[number_of_dots + strlen(token)] == '\n') {
+                
+            }
+        }
+        token = strtok(NULL, ".");
+        number_of_dots++;
+    }
+    return 1;
 }
 
-int find_minigit_directory() {
+int find_minigit_directory() { // TODO: complete this function
     if (getcwd(cwd, sizeof(cwd)) == NULL) return 1;
     memcpy(proj_dir, cwd, sizeof(cwd));
     char spath[MAX_PATH_LENGTH];
@@ -467,12 +485,12 @@ int checkout_file(char *filepath, int commit_ID) {
 }*/
 
 int main(int argc, char *argv[]) {
-    
+
     if (argc < 2) {
         fprintf(stdout, "too few arguments to program 'MiniGit'");
         return 1;
     }
-    
+
     print_command(argc, argv); // Not officially, just used for developing, and debuging
 
     if (strcmp(argv[1], "init") == 0) {
