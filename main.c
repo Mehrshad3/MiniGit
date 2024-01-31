@@ -14,11 +14,13 @@
 
 #define debug(x) printf("%s", x);
 
+char cwd[MAX_PATH_LENGTH];
+char proj_dir[MAX_PATH_LENGTH];
 
 void print_command(int argc, char * const argv[]);
 
 int run_init(int argc, char * const argv[]);
-int create_configs(char *username, char *email);
+int create_files();
 
 int run_add(int argc, char * const argv[]);
 int add_to_staging(char *filepath);
@@ -46,27 +48,29 @@ void print_command(int argc, char * const argv[]) {
     fprintf(stdout, "\n");
 }
 
-int run_init(int argc, char * const argv[]) {
-    char cwd[MAX_PATH_LENGTH];
-    if (getcwd(cwd, sizeof(cwd)) == NULL) return 1;
+char* read_from_minigit(char* path, char* element) {
+    char fullpath[MAX_PATH_LENGTH];
+    sprintf(fullpath , ".Minigit\\%s", path);
+    return NULL;
+}
 
-    char tmp_cwd[MAX_PATH_LENGTH];
-    memcpy(tmp_cwd, cwd, sizeof(cwd));
-    bool exists = false;
+int find_minigit_directory() {
+    if (getcwd(cwd, sizeof(cwd)) == NULL) return 1;
+    memcpy(proj_dir, cwd, sizeof(cwd));
     char spath[MAX_PATH_LENGTH];
-    //struct dirent *entry;
+    bool exists = false;
     bool drive_reached = false;
     do {
-        drive_reached = drive_reached || (strcmp(tmp_cwd + 1, ":\\") == 0);
+        drive_reached = drive_reached || (strcmp(proj_dir + 1, ":\\") == 0);
         char trash;
         // find .neogit
         WIN32_FIND_DATA fdFile; // this data type stores file attributes
-        strcpy(spath, tmp_cwd);
+        strcpy(spath, proj_dir);
         strcat(spath, "\\*");
         HANDLE handle; // handle is something like a pointer to a file, IDK maybe similar to struct dirent in Linux
         if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) {
             perror("Error opening current directory");
-            perror("If current directory path has Persian characters, or spaces, opening has not been implemented.");
+            perror("If current directory path has Persian characters, opening has not been implemented.");
             return 1;
         }
         do {
@@ -82,29 +86,36 @@ int run_init(int argc, char * const argv[]) {
         }
 
         // update current working directory
-        if (getcwd(tmp_cwd, sizeof(tmp_cwd)) == NULL) return 1;
+        if (getcwd(proj_dir, sizeof(proj_dir)) == NULL) return 1;
 
     } while (!drive_reached && !exists);
+    
+    if (chdir(cwd) != 0) return 1;
+    if (!exists) proj_dir[0] = '\0';
+    return 0;
+}
 
+int run_init(int argc, char * const argv[]) {
+    if (find_minigit_directory()) return 1;
     // return to the initial cwd
     if (chdir(cwd) != 0) return 1;
-    if (!exists) {
+    if (!proj_dir[0]) {
         if (CreateDirectory(".MiniGit", NULL) == 0) return 1;
         if (!SetFileAttributes(".MiniGit", FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN)) return 1;
-
-        return create_configs("mohsen", "mohsenghasemi8156@gmail.com");
+        strcpy(proj_dir, cwd);
+        return create_files();
     } else {
-        perror("neogit repository has already initialized.");
+        perror("MiniGit repository has already initialized.");
     }
     return 0;
 }
 
-int create_configs(char *username, char *email) {
+int create_files() {
     FILE *file = fopen(".MiniGit/config", "w");
     if (file == NULL) return 1;
 
-    if (username) fprintf(file, "username: %s\n", username);
-    if (email) fprintf(file, "email: %s\n", email);
+    fprintf(file, "username:\n");
+    fprintf(file, "email:\n");
     fprintf(file, "last_commit_ID: %d\n", 0);
     fprintf(file, "current_commit_ID: %d\n", 0);
     fprintf(file, "branch: %s", "master");
