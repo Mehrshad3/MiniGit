@@ -1,7 +1,7 @@
 # MiniGit
 A project implementing features of git by C
 
-You can see the Persian documention of what I have to build as 1st phase (v1.0.0) [here](https://github.com/Mehrshad3/MiniGit/blob/main/FOP-Phase1.pdf) or on the Telegram channel (exactly where?).
+You can see the Persian documention of what I have to build as 1st phase (v1.0.0) [here](https://github.com/Mehrshad3/MiniGit/blob/main/FOP-Phase1.pdf) or on the [Telegram channel](https://t.me/fop_ce_2023/187).
 
 ## Features claimed to be supported
 - GitHub
