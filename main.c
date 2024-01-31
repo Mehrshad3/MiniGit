@@ -49,24 +49,32 @@ void print_command(int argc, char * const argv[]) {
     fprintf(stdout, "\n");
 }
 
-int read_from_minigit(char* path, char* element, char line[MAX_LINE_LENGTH]) {
-    int number_of_dots = 0;
-    char fullpath[MAX_PATH_LENGTH];
-    sprintf(fullpath , ".Minigit\\%s", path);
-    unsigned long attribute = GetFileAttributes(fullpath);
+int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], char* _Mode) {
+    // TODO : add the ability to write to this function
+    int number_of_tabs = 0;
+    char absolute_path[MAX_PATH_LENGTH];
+    sprintf(absolute_path , "%s\\.MiniGit\\%s", proj_dir, path);
+    printf("%s\n", absolute_path);
+    unsigned long attribute = GetFileAttributes(absolute_path);
+    printf("%x\n", attribute);
     if (attribute == INVALID_FILE_ATTRIBUTES) return 1;
+    FILE* file = fopen(absolute_path, _Mode);
     char* token = strtok(element, ".");
-    while (token) {
-        for (int i = number_of_dots - 1; i >= 0; i--) {
+    bool found = false;
+    while (token && !found) {
+        fgets(line, sizeof(line, file), file);
+        printf("%s\n", line);
+        for (int i = number_of_tabs - 1; i >= 0; i--) {
             if (line[i] != '\t') return 1;
         }
-        if (strncmp(line + number_of_dots, token, strlen(token)) == 0) {
-            if (line[number_of_dots + strlen(token)] == ':' || line[number_of_dots + strlen(token)] == '\n') {
-                
+        if (strncmp(line + number_of_tabs, token, strlen(token)) == 0) {
+            if (line[number_of_tabs + strlen(token)] == ':' || line[number_of_tabs + strlen(token)] == '\n') {
+                memmove(line, line + number_of_tabs + strlen(token) + 2, strlen(line + number_of_tabs + strlen(token) + 1));
+                found = true;
             }
         }
         token = strtok(NULL, ".");
-        number_of_dots++;
+        number_of_tabs++;
     }
     return 1;
 }
@@ -493,9 +501,27 @@ int main(int argc, char *argv[]) {
 
     print_command(argc, argv); // Not officially, just used for developing, and debuging
 
+    if (strcmp(argv[1], "init") != 0 && strcmp(argv[1], "config") != 0) {
+        if (find_minigit_directory() != 0) {
+            perror("MiniGit repository has'n initialized yet.");
+            return 1;
+        }
+    }
+
     if (strcmp(argv[1], "init") == 0) {
         return run_init(argc, argv);
-    }/* else if (strcmp(argv[1], "add") == 0) {
+    }
+    else if (strcmp(argv[1], "test") == 0) {
+        if (find_minigit_directory() != 0) {
+            perror("MiniGit repository has'n initialized yet.");
+            return 1;
+        }
+        char line[MAX_LINE_LENGTH];
+        printf("%d\n", read_write_minigit(argv[2], argv[3], line, "r"));
+        printf("%s\n", line);
+        return 0;
+    }
+    /* else if (strcmp(argv[1], "add") == 0) {
         return 0;run_add(argc, argv);
     } else if (strcmp(argv[1], "reset") == 0) {
         return run_reset(argc, argv);
