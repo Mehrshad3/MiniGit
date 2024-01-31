@@ -1,11 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <dirent.h>
 #include <stdbool.h>
-#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <windows.h>
 
 #define MAX_FILENAME_LENGTH 1000
 #define MAX_COMMIT_MESSAGE_LENGTH 2000
@@ -51,44 +50,59 @@ int run_init(int argc, char * const argv[]) {
     if (getcwd(cwd, sizeof(cwd)) == NULL) return 1;
 
     char tmp_cwd[1024];
+    memcpy(tmp_cwd, cwd, sizeof(cwd));
     bool exists = false;
-    struct dirent *entry;
+    char spath[1024];
+    //struct dirent *entry;
+
     do {
+        char trash;
+        scanf("%c", &trash);
+        printf("tmp_cwd = %s\n", tmp_cwd);
         // find .neogit
-        DIR *dir = opendir(".");
-        if (dir == NULL) {
+        WIN32_FIND_DATA fdFile; // this data type stores file attributes
+        strcpy(spath, tmp_cwd);
+        strcat(spath, "\\*");
+        printf("%s\n\n", spath);
+        HANDLE handle; // handle is something like a pointer to a file, IDK maybe similar to struct dirent in Linux
+        if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) {
             perror("Error opening current directory");
             return 1;
         }
-        while ((entry = readdir(dir)) != NULL) {
-            if (entry->d_type == DT_DIR && strcmp(entry->d_name, ".neogit") == 0)
+        do {
+            if (fdFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && strcmp(fdFile.cFileName, ".MiniGit") == 0) {
                 exists = true;
+                if (!(fdFile.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
+                    SetFileAttributes("./.MiniGit", fdFile.dwFileAttributes || FILE_ATTRIBUTE_HIDDEN);
+                }
+            }
+            printf("%s\n", fdFile.cFileName);
+            printf("%d\n", exists);
+        } while (FindNextFile(handle, &fdFile));
+        FindClose(handle);
+
+        // change cwd to parent
+        if (strcmp(tmp_cwd + 1, ":\\") != 0) {
+            if (chdir("..") != 0) return 1;
         }
-        closedir(dir);
 
         // update current working directory
         if (getcwd(tmp_cwd, sizeof(tmp_cwd)) == NULL) return 1;
 
-        // change cwd to parent
-        if (strcmp(tmp_cwd, "/") != 0) {
-            if (chdir("..") != 0) return 1;
-        }
-
-    } while (strcmp(tmp_cwd, "/") != 0);
+    } while (strcmp(tmp_cwd + 1, ":\\") != 0 && !exists);
 
     // return to the initial cwd
     if (chdir(cwd) != 0) return 1;
-        
     if (!exists) {
-        if (mkdir(".neogit", 0755) != 0) return 1;
-        return create_configs("mohsen", "mohsenghasemi8156@gmail.com");
+        if (CreateDirectory("./.MiniGit", NULL) == 0) return 1;
+        return 0;//create_configs("mohsen", "mohsenghasemi8156@gmail.com");
     } else {
-        perror("neogit repository has already initialized");
+        perror("neogit repository has already initialized.");
     }
     return 0;
 }
 
-int create_configs(char *username, char *email) {
+/*int create_configs(char *username, char *email) {
     FILE *file = fopen(".neogit/config", "w");
     if (file == NULL) return 1;
 
@@ -448,12 +462,12 @@ int checkout_file(char *filepath, int commit_ID) {
     fclose(write_file);
 
     return 0;
-}
+}*/
 
 int main(int argc, char *argv[]) {
     
     if (argc < 2) {
-        fprintf(stdout, "please enter a valid command");
+        fprintf(stdout, "too few arguments to program 'MiniGit'");
         return 1;
     }
     
@@ -461,15 +475,15 @@ int main(int argc, char *argv[]) {
 
     if (strcmp(argv[1], "init") == 0) {
         return run_init(argc, argv);
-    } else if (strcmp(argv[1], "add") == 0) {
-        return run_add(argc, argv);
+    }/* else if (strcmp(argv[1], "add") == 0) {
+        return 0;run_add(argc, argv);
     } else if (strcmp(argv[1], "reset") == 0) {
         return run_reset(argc, argv);
     } else if (strcmp(argv[1], "commit") == 0) {
         return run_commit(argc, argv);
     } else if (strcmp(argv[1], "checkout") == 0) {
         return run_checkout(argc, argv);
-    }
+    }*/
     
     return 0;
 }
