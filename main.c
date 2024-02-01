@@ -71,7 +71,7 @@ int read_from_minigit(char* path, char* element, char line[MAX_LINE_LENGTH]) {
     return 1;
 }
 
-int find_minigit_directory() { // TODO: complete this function
+int find_minigit_directory() {
     if (getcwd(cwd, sizeof(cwd)) == NULL) return 1;
     memcpy(proj_dir, cwd, sizeof(cwd));
     char spath[MAX_PATH_LENGTH];
