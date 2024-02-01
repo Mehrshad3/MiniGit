@@ -56,27 +56,36 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
     sprintf(absolute_path , "%s\\.MiniGit\\%s", proj_dir, path);
     printf("%s\n", absolute_path);
     unsigned long attribute = GetFileAttributes(absolute_path);
-    printf("%x\n", attribute);
     if (attribute == INVALID_FILE_ATTRIBUTES) return 1;
     FILE* file = fopen(absolute_path, _Mode);
+    if (file == NULL) return 1;
     char* token = strtok(element, ".");
     bool found = false;
     while (token && !found) {
-        fgets(line, sizeof(line, file), file);
-        printf("%s\n", line);
+        if (fgets(line, MAX_LINE_LENGTH, file) == NULL) {
+            fclose(file);
+            return 1;
+        }
+        printf("%s", line);
         for (int i = number_of_tabs - 1; i >= 0; i--) {
-            if (line[i] != '\t') return 1;
+            if (line[i] != '\t') {
+                fclose(file);
+                return 1;
+            }
         }
         if (strncmp(line + number_of_tabs, token, strlen(token)) == 0) {
-            if (line[number_of_tabs + strlen(token)] == ':' || line[number_of_tabs + strlen(token)] == '\n') {
+            if (line[number_of_tabs + strlen(token)] == '\n') {
+                token = strtok(NULL, ".");
+                number_of_tabs++;
+            }
+            else if (line[number_of_tabs + strlen(token)] == ':') {
                 memmove(line, line + number_of_tabs + strlen(token) + 2, strlen(line + number_of_tabs + strlen(token) + 1));
                 found = true;
             }
         }
-        token = strtok(NULL, ".");
-        number_of_tabs++;
     }
-    return 1;
+    fclose(file);
+    return !found;
 }
 
 int find_minigit_directory() {
@@ -139,7 +148,7 @@ int run_init(int argc, char * const argv[]) {
     fprintf(file, "email:\n");
     fprintf(file, "last_commit_ID: %d\n", 0);
     fprintf(file, "current_commit_ID: %d\n", 0);
-    fprintf(file, "branch: %s", "master");
+    fprintf(file, "branch: %s\n", "master");
 
     fclose(file);
     // create commits folder
