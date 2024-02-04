@@ -14,6 +14,9 @@
 
 #define IS_WHITE_SPACE(_C) (_C == ' ' || _C == '\t' || _C == '\n' || _C == '\r' || _C == '\f' || _C == '\v')
 
+#define USERNAME "Asus"
+#define GLOBAL_CONFIG "C:\\Users\\" USERNAME "\\.MiniGitConfig"
+
 #define debug(x) printf("%s", x);
 
 char cwd[MAX_PATH_LENGTH];
@@ -49,26 +52,160 @@ void print_command(int argc, char * const argv[]) {
     fprintf(stdout, "\n");
 }
 
-int read_from_minigit(char* path, char* element, char line[MAX_LINE_LENGTH]) {
-    int number_of_dots = 0;
-    char fullpath[MAX_PATH_LENGTH];
-    sprintf(fullpath , ".Minigit\\%s", path);
-    unsigned long attribute = GetFileAttributes(fullpath);
-    if (attribute == INVALID_FILE_ATTRIBUTES) return 1;
-    char* token = strtok(element, ".");
-    while (token) {
-        for (int i = number_of_dots - 1; i >= 0; i--) {
-            if (line[i] != '\t') return 1;
+int insert_or_delete(FILE* file, char* absolute_path, char** lines, int previous_number_of_lines, int number_of_tabs, char* token, char* value_to_insert, char line[MAX_LINE_LENGTH]) {
+    int new_num_lines = previous_number_of_lines;
+    printf("we're in insert_or_delete funct.\n");
+    bool EOF_reached = false;
+    if (value_to_insert == NULL) { // _Mode[0] == 'd'
+        bool has_tabs = true;
+        while (has_tabs && !(EOF_reached = !fgets(line, MAX_LINE_LENGTH, file))) {
+            has_tabs = true;
+            for (int i = 0; i <= number_of_tabs; i++) {
+                if (line[i] != '\t') {
+                    has_tabs = false;
+                    break;
+                }
+            }
+            if (!has_tabs) break;
         }
-        if (strncmp(line + number_of_dots, token, strlen(token)) == 0) {
-            if (line[number_of_dots + strlen(token)] == ':' || line[number_of_dots + strlen(token)] == '\n') {
-                
+    }
+    else {
+        do {
+            if (!(new_num_lines & 15)) lines = realloc(lines, (((new_num_lines) + 16)) * sizeof(char*));
+            char new_line[MAX_LINE_LENGTH];
+            memset(new_line, '\t', number_of_tabs);
+            strcpy(new_line + number_of_tabs, token);
+            if ((token = strtok(NULL, ".")) == NULL && value_to_insert) {
+                int len = strlen(new_line + number_of_tabs);
+                sprintf(new_line + number_of_tabs + len, ": %s\n", value_to_insert);
+            }
+            else {
+                strcat(new_line, "\n");
+            }
+            lines[new_num_lines++] = malloc((strlen(new_line) + 1) * sizeof(char));
+            strcpy(lines[new_num_lines - 1], new_line);
+            number_of_tabs++;
+        } while (token);
+    }
+    while (!EOF_reached) {
+        if (!(new_num_lines & 15)) lines = realloc(lines, (((new_num_lines) + 16)) * sizeof(char*));
+        lines[new_num_lines] = malloc((strlen(line) + 1) * sizeof(char));
+        strcpy(lines[new_num_lines++], line);
+        EOF_reached = fgets(line, MAX_LINE_LENGTH, file) == NULL;
+    }
+    if (fclose(file)) return 1;
+    if (!(file = fopen(absolute_path, "w"))) return 1;
+    for (int i = 0; i < new_num_lines; i++) {
+        if (fputs(lines[i], file) == EOF) return 1;
+    }
+    if (fclose(file)) return 1;
+    return 0;
+}
+
+int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], char* value_to_insert, char* _Mode) {
+    // TODO : add the ability to write to this function, and other modes
+    // modes: 'f' for find, 'i' for insert and edit, 'd' to delete, 'n' to go to next subitem, 't' to go to first subitem, 'c' to close file
+    // If second character or _Mode is g, then it'll change global variables.
+
+    static FILE* file = NULL;
+    if (_Mode[0] == 'c') {
+        bool return_value = fclose(file);
+        file = NULL;
+        return return_value;
+    }
+    bool file_exists = false;
+
+    static int number_of_tabs = 0;
+    char absolute_path[MAX_PATH_LENGTH];
+    if (path != NULL) {
+        number_of_tabs = 0;
+        if (file != NULL) {
+            fclose(file);
+        }
+        if (_Mode[1] != 'g') {
+            sprintf(absolute_path , "%s\\.MiniGit\\%s", proj_dir, path);
+        }
+        else sprintf(absolute_path, "%s", GLOBAL_CONFIG);
+        printf("%s\n", absolute_path);
+        unsigned long attribute = GetFileAttributes(absolute_path);
+        if (attribute != INVALID_FILE_ATTRIBUTES) file_exists = true;
+        if (!file_exists && (_Mode[0] != 'i')) return 1; // TODO: create file if mode is insert
+        if (file_exists) file = fopen(absolute_path, "r");
+    }
+    char** lines = NULL;
+    int number_of_lines = 0;
+    if (file == NULL) return 1;
+    char* element_copy = (char*) malloc((strlen(element + 1) * sizeof(char)));
+    strcpy(element_copy, element);
+    char* token = strtok(element_copy, ".");
+    if (_Mode[0] == 'n') number_of_tabs--; // This number is increased in previous function call, so I turn it back.
+    else if (_Mode[0] == 'f' || _Mode[0] == 'i' || _Mode[0] == 'd') number_of_tabs = 0;
+    bool found = false;
+    bool inserted_or_deleted = false;
+    while (token || (_Mode[0] == 't' || _Mode[0] == 'n')) {
+        if (fgets(line, MAX_LINE_LENGTH, file) == NULL) {
+            if (_Mode[0] == 'i') {
+                line[0] = '\0';
+                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
+            }
+            else if (fclose(file)) return 1;
+            file = NULL;
+            break;
+        }
+        found = false;
+        for (int i = number_of_tabs - 1; i >= 0; i--) {
+            if (line[i] != '\t') {
+                line[0] = '\0';
+                if (_Mode[0] == 'i') inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
+                file = NULL;
+                break;
             }
         }
-        token = strtok(NULL, ".");
-        number_of_dots++;
+        bool EOL = false, element = false;
+        if (_Mode[0] == 't') {
+            memmove(line, line + number_of_tabs, strlen(line + number_of_tabs) + 1);
+            found = true;
+        }
+        else if (_Mode[0] == 'n') {
+            if (line[number_of_tabs] != '\t') {
+                memmove(line, line + number_of_tabs, strlen(line + number_of_tabs) + 1);
+                found = true;
+            }
+        }
+        else if (strncmp(line + number_of_tabs, token, strlen(token)) == 0) {
+            char* token_copy = token;
+            bool EOL = false, element = false;
+            if (line[number_of_tabs + strlen(token)] == '\n') {
+                EOL = true;
+                if (_Mode[0] != 'd' && _Mode[0] != 'i') memmove(line, line + number_of_tabs, strlen(line + number_of_tabs) + 1);
+            }
+            else if (line[number_of_tabs + strlen(token)] == ':') {
+                element = true;
+                if (_Mode[0] != 'd' && _Mode[0] != 'i') memmove(line, line + number_of_tabs + strlen(token) + 2, strlen(line + number_of_tabs + strlen(token) + 1));
+            }
+            if (found = EOL | element) token = strtok(NULL, ".");
+            if ((_Mode[0] == 'i' || _Mode[0] == 'd') && token == NULL) {
+                line[0] = '\0';
+                if (_Mode[0] == 'i') token = token_copy;
+                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
+                file = NULL;
+                break;
+            }
+        }
+        if ((_Mode[0] == 'i' || _Mode[0] == 'd') && token) {
+            if (!(number_of_lines & 15)) lines = realloc(lines, (((number_of_lines) + 16)) * sizeof(char*));
+            lines[number_of_lines++] = malloc((strlen(line) + 1) * sizeof(char));
+            strcpy(lines[number_of_lines - 1], line);
+        }
+        if (found) number_of_tabs++;
+        if (_Mode[0] == 't' || _Mode[0] == 'n' && found) break;
     }
-    return 1;
+    for (int i = 0; i < number_of_lines; i++) {
+        free(lines[i]);
+    }
+    free(lines);
+    free(element_copy);
+    return !(found || inserted_or_deleted);
 }
 
 int find_minigit_directory() {
@@ -131,7 +268,7 @@ int run_init(int argc, char * const argv[]) {
     fprintf(file, "email:\n");
     fprintf(file, "last_commit_ID: %d\n", 0);
     fprintf(file, "current_commit_ID: %d\n", 0);
-    fprintf(file, "branch: %s", "master");
+    fprintf(file, "branch: %s\n", "master");
 
     fclose(file);
     // create commits folder
@@ -493,9 +630,45 @@ int main(int argc, char *argv[]) {
 
     print_command(argc, argv); // Not officially, just used for developing, and debuging
 
+    if (strcmp(argv[1], "init") != 0 && strcmp(argv[1], "config") != 0) {
+        if (find_minigit_directory() != 0) {
+            perror("MiniGit repository has'n initialized yet.");
+            return 1;
+        }
+    }
+
     if (strcmp(argv[1], "init") == 0) {
         return run_init(argc, argv);
-    }/* else if (strcmp(argv[1], "add") == 0) {
+    }
+    else if (strcmp(argv[1], "test") == 0) {
+        if (find_minigit_directory() != 0) {
+            perror("MiniGit repository has'n initialized yet.");
+            return 1;
+        }
+        char line[MAX_LINE_LENGTH];
+        char line2[MAX_LINE_LENGTH];
+        do {
+            fgets(line2, sizeof(line2), stdin);
+            if (!strcmp(line2, "end")) break;
+            char t1[MAX_LINE_LENGTH];
+            char t2[MAX_LINE_LENGTH];
+            char t3[MAX_LINE_LENGTH];
+            char t4[MAX_LINE_LENGTH];
+            sscanf(line2, "%s %s %s %s", t1, t2, t3, t4);
+            char *s1 = t1, *s2 = t2, *s3 = t3, *s4 = t4;
+            if (!strcmp(s1, "NULL")) s1 = NULL;
+            if (!strcmp(s2, "NULL")) s2 = NULL;
+            if (!strcmp(s3, "NULL")) s3 = NULL;
+            if (!strcmp(s4, "NULL")) s4 = NULL;
+            int failure = read_write_minigit(s1, s2, line, s3, s4);
+            printf("%d\n", failure);
+            printf("%.40s\n", line);
+        } while(strcmp(line2, "end\n"));
+        read_write_minigit(NULL, NULL, NULL, NULL, "c");
+        printf("%s\n", line);
+        return 0;
+    }
+    /* else if (strcmp(argv[1], "add") == 0) {
         return 0;run_add(argc, argv);
     } else if (strcmp(argv[1], "reset") == 0) {
         return run_reset(argc, argv);
