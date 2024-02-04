@@ -18,8 +18,6 @@
 #define USERNAME "Asus"
 #define GLOBAL_CONFIG "C:\\Users\\" USERNAME "\\." PROGRAM_NAME "Config"
 
-#define debug(x) printf("%s", x);
-
 char cwd[MAX_PATH_LENGTH];
 char proj_dir[MAX_PATH_LENGTH];
 
@@ -53,8 +51,17 @@ void print_command(int argc, char * const argv[]) {
     fprintf(stdout, "\n");
 }
 
-int insert_or_delete(FILE* file, char* absolute_path, char** lines, int previous_number_of_lines, int number_of_tabs, char* token, char* value_to_insert, char line[MAX_LINE_LENGTH]) {
-    int new_num_lines = previous_number_of_lines;
+void replace_characters_in_string(char* string, char to_replace, char replace_with) {
+    while (*string != '\0') {
+        if (*string == to_replace) {
+            *string = replace_with;
+        }
+        string++;
+    }
+}
+
+int insert_or_delete(FILE* file, char* absolute_path, char** lines, int* number_of_lines, int number_of_tabs, char* token, char* value_to_insert, char line[MAX_LINE_LENGTH]) {
+    int new_num_lines = *number_of_lines;
     printf("we're in insert_or_delete funct.\n");
     bool EOF_reached = false;
     if (value_to_insert == NULL) { // _Mode[0] == 'd'
@@ -100,6 +107,7 @@ int insert_or_delete(FILE* file, char* absolute_path, char** lines, int previous
         if (fputs(lines[i], file) == EOF) return 1;
     }
     if (fclose(file)) return 1;
+    *number_of_lines = new_num_lines;
     return 0;
 }
 
@@ -118,7 +126,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
 
     static int number_of_tabs = 0;
     char absolute_path[MAX_PATH_LENGTH];
-    if (path != NULL) {
+    if (path != NULL || _Mode[1] == 'g') {
         number_of_tabs = 0;
         if (file != NULL) {
             fclose(file);
@@ -130,13 +138,20 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
         printf("%s\n", absolute_path);
         unsigned long attribute = GetFileAttributes(absolute_path);
         if (attribute != INVALID_FILE_ATTRIBUTES) file_exists = true;
-        if (!file_exists && (_Mode[0] != 'i')) return 1; // TODO: create file if mode is insert
-        if (file_exists) file = fopen(absolute_path, "r");
+        if (!file_exists && _Mode[1] == 'g') {
+            perror("Global configuration file hasn't been set.");
+        }
+        if (!file_exists) {
+            if (_Mode[0] != 'i') return 1;
+            if ((file = fopen(absolute_path, "w")) == NULL) return 1;
+            if (fclose(file)) return 1;
+        }
+        file = fopen(absolute_path, "r");
     }
     char** lines = NULL;
     int number_of_lines = 0;
     if (file == NULL) return 1;
-    char* element_copy = (char*) malloc((strlen(element + 1) * sizeof(char)));
+    char* element_copy = (char*) malloc((strlen(element) + 1) * sizeof(char));
     strcpy(element_copy, element);
     char* token = strtok(element_copy, ".");
     if (_Mode[0] == 'n') number_of_tabs--; // This number is increased in previous function call, so I turn it back.
@@ -147,7 +162,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
         if (fgets(line, MAX_LINE_LENGTH, file) == NULL) {
             if (_Mode[0] == 'i') {
                 line[0] = '\0';
-                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
+                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, &number_of_lines, number_of_tabs, token, value_to_insert, line);
             }
             else if (fclose(file)) return 1;
             file = NULL;
@@ -157,7 +172,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
         for (int i = number_of_tabs - 1; i >= 0; i--) {
             if (line[i] != '\t') {
                 line[0] = '\0';
-                if (_Mode[0] == 'i') inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
+                if (_Mode[0] == 'i') inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, &number_of_lines, number_of_tabs, token, value_to_insert, line);
                 file = NULL;
                 break;
             }
@@ -188,7 +203,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
             if ((_Mode[0] == 'i' || _Mode[0] == 'd') && token == NULL) {
                 line[0] = '\0';
                 if (_Mode[0] == 'i') token = token_copy;
-                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
+                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, &number_of_lines, number_of_tabs, token, value_to_insert, line);
                 file = NULL;
                 break;
             }
@@ -198,6 +213,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
             lines[number_of_lines++] = malloc((strlen(line) + 1) * sizeof(char));
             strcpy(lines[number_of_lines - 1], line);
         }
+        else line[number_of_tabs + strlen(line + number_of_tabs) - 1] = '\0';
         if (found) number_of_tabs++;
         if (_Mode[0] == 't' || _Mode[0] == 'n' && found) break;
     }
@@ -257,6 +273,28 @@ int run_init(int argc, char * const argv[]) {
         perror(PROGRAM_NAME " repository has already initialized.");
         return 0;
     }
+    if (GetFileAttributes(GLOBAL_CONFIG) == INVALID_FILE_ATTRIBUTES) {
+        FILE* gf = fopen(GLOBAL_CONFIG, "w");
+        if (gf == NULL) return 1;
+        fprintf(gf, "user\n");
+        fprintf(gf, "\tname: \n");
+        fprintf(gf, "\temail: \n");
+        if (fclose(gf)) return 1;
+    }
+    char username[MAX_LINE_LENGTH];
+    char email[MAX_LINE_LENGTH];
+    if (read_write_minigit(NULL, "user.name", username, NULL, "fg")) return 1;
+    fprintf(stdout, "username: %s\n", username);
+    if (read_write_minigit(NULL, "user.email", email, NULL, "fg")) return 1;
+    read_write_minigit(NULL, NULL, NULL, NULL, "c");
+    char string[MAX_LINE_LENGTH];
+    char line[MAX_LINE_LENGTH];
+    char line2[MAX_LINE_LENGTH];
+    sprintf(string, "projects.%s", cwd);
+    replace_characters_in_string(string + 9, '.', '|');
+    line2[0] = '\0';
+    if (read_write_minigit(NULL, string, line, line2, "ig")) return 1;
+    printf("success\n");
     if (CreateDirectory("." PROGRAM_NAME, NULL) == 0) return 1;
     if (!SetFileAttributes("." PROGRAM_NAME, FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN)) return 1;
     strcpy(proj_dir, cwd);
@@ -265,11 +303,12 @@ int run_init(int argc, char * const argv[]) {
     FILE *file = fopen("." PROGRAM_NAME "\\config", "w");
     if (file == NULL) return 1;
 
-    fprintf(file, "username:\n");
-    fprintf(file, "email:\n");
-    fprintf(file, "last_commit_ID: %d\n", 0);
-    fprintf(file, "current_commit_ID: %d\n", 0);
-    fprintf(file, "branch: %s\n", "master");
+    fprintf(file, "user\n");
+    fprintf(file, "\tname: %s\n", username);
+    fprintf(file, "\temail: %s\n", email);
+    fprintf(file, "last_commit_ID: %d\n", 1000000);
+    fprintf(file, "current_commit_ID: %d\n", 1000000);
+    fprintf(file, "branch: %s\n", "main");
 
     fclose(file);
     // create commits folder
@@ -285,6 +324,12 @@ int run_init(int argc, char * const argv[]) {
     fclose(file);
 
     return 0;
+}
+
+int run_config(int argc, char* const argv[]) {
+    bool global = !strcmp(argv[1], "-global");
+    if (getcwd(cwd, sizeof(cwd)) == NULL) return 1;
+    printf("%s\n", cwd);
 }
 
 /*int run_add(int argc, char *const argv[]) {
@@ -650,6 +695,7 @@ int main(int argc, char *argv[]) {
         char line2[MAX_LINE_LENGTH];
         do {
             fgets(line2, sizeof(line2), stdin);
+            if (!strcmp(line2, "end\n")) break;
             if (!strcmp(line2, "end")) break;
             char t1[MAX_LINE_LENGTH];
             char t2[MAX_LINE_LENGTH];
@@ -664,10 +710,13 @@ int main(int argc, char *argv[]) {
             int failure = read_write_minigit(s1, s2, line, s3, s4);
             printf("%d\n", failure);
             printf("%.40s\n", line);
-        } while(strcmp(line2, "end\n"));
+        } while(true);
         read_write_minigit(NULL, NULL, NULL, NULL, "c");
         printf("%s\n", line);
         return 0;
+    }
+    else if (strcmp(argv[1], "config") == 0) {
+        run_config(argc, argv);
     }
     /* else if (strcmp(argv[1], "add") == 0) {
         return 0;run_add(argc, argv);
