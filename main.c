@@ -14,8 +14,9 @@
 
 #define IS_WHITE_SPACE(_C) (_C == ' ' || _C == '\t' || _C == '\n' || _C == '\r' || _C == '\f' || _C == '\v')
 
+#define PROGRAM_NAME "MiniGit"
 #define USERNAME "Asus"
-#define GLOBAL_CONFIG "C:\\Users\\" USERNAME "\\.MiniGitConfig"
+#define GLOBAL_CONFIG "C:\\Users\\" USERNAME "\\." PROGRAM_NAME "Config"
 
 #define debug(x) printf("%s", x);
 
@@ -123,7 +124,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
             fclose(file);
         }
         if (_Mode[1] != 'g') {
-            sprintf(absolute_path , "%s\\.MiniGit\\%s", proj_dir, path);
+            sprintf(absolute_path , "%s\\." PROGRAM_NAME "\\%s", proj_dir, path);
         }
         else sprintf(absolute_path, "%s", GLOBAL_CONFIG);
         printf("%s\n", absolute_path);
@@ -228,7 +229,7 @@ int find_minigit_directory() {
             return 1;
         }
         do {
-            if (fdFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && strcmp(fdFile.cFileName, ".MiniGit") == 0) {
+            if (fdFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY && strcmp(fdFile.cFileName, "."PROGRAM_NAME) == 0) {
                 exists = true;
             }
         } while (FindNextFile(handle, &fdFile));
@@ -253,15 +254,15 @@ int run_init(int argc, char * const argv[]) {
     if (find_minigit_directory()) return 1;
     // return to the initial cwd
     if (proj_dir[0]) {
-        perror("MiniGit repository has already initialized.");
+        perror(PROGRAM_NAME " repository has already initialized.");
         return 0;
     }
-    if (CreateDirectory(".MiniGit", NULL) == 0) return 1;
-    if (!SetFileAttributes(".MiniGit", FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN)) return 1;
+    if (CreateDirectory("." PROGRAM_NAME, NULL) == 0) return 1;
+    if (!SetFileAttributes("." PROGRAM_NAME, FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN)) return 1;
     strcpy(proj_dir, cwd);
 
     // Former create_files function
-    FILE *file = fopen(".MiniGit/config", "w");
+    FILE *file = fopen("." PROGRAM_NAME "\\config", "w");
     if (file == NULL) return 1;
 
     fprintf(file, "username:\n");
@@ -272,15 +273,15 @@ int run_init(int argc, char * const argv[]) {
 
     fclose(file);
     // create commits folder
-    if (mkdir(".MiniGit/commits") != 0) return 1;
+    if (mkdir("." PROGRAM_NAME "\\commits") != 0) return 1;
 
     // create files folder
-    if (mkdir(".MiniGit/files") != 0) return 1;
+    if (mkdir("." PROGRAM_NAME "\\files") != 0) return 1;
 
-    file = fopen(".MiniGit/staging", "w");
+    file = fopen("." PROGRAM_NAME "\\staging", "w");
     fclose(file);
 
-    file = fopen(".MiniGit/tracks", "w");
+    file = fopen("." PROGRAM_NAME "\\tracks", "w");
     fclose(file);
 
     return 0;
@@ -624,7 +625,7 @@ int checkout_file(char *filepath, int commit_ID) {
 int main(int argc, char *argv[]) {
 
     if (argc < 2) {
-        fprintf(stdout, "too few arguments to program 'MiniGit'");
+        fprintf(stdout, "too few arguments to program '" PROGRAM_NAME "'");
         return 1;
     }
 
@@ -632,7 +633,7 @@ int main(int argc, char *argv[]) {
 
     if (strcmp(argv[1], "init") != 0 && strcmp(argv[1], "config") != 0) {
         if (find_minigit_directory() != 0) {
-            perror("MiniGit repository has'n initialized yet.");
+            perror(PROGRAM_NAME " repository has'n initialized yet.");
             return 1;
         }
     }
@@ -642,7 +643,7 @@ int main(int argc, char *argv[]) {
     }
     else if (strcmp(argv[1], "test") == 0) {
         if (find_minigit_directory() != 0) {
-            perror("MiniGit repository has'n initialized yet.");
+            perror(PROGRAM_NAME " repository has'n initialized yet.");
             return 1;
         }
         char line[MAX_LINE_LENGTH];
