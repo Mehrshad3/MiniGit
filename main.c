@@ -58,7 +58,7 @@ int insert_or_delete(FILE* file, char* absolute_path, char** lines, int previous
     bool EOF_reached = false;
     if (value_to_insert == NULL) { // _Mode[0] == 'd'
         bool has_tabs = true;
-        while (has_tabs && (EOF_reached = fgets(line, MAX_LINE_LENGTH, file))) {
+        while (has_tabs && !(EOF_reached = !fgets(line, MAX_LINE_LENGTH, file))) {
             has_tabs = true;
             for (int i = 0; i <= number_of_tabs; i++) {
                 if (line[i] != '\t') {
@@ -92,8 +92,8 @@ int insert_or_delete(FILE* file, char* absolute_path, char** lines, int previous
     while (!EOF_reached) {
         printf(".%s\n", line);
         if (!(new_num_lines & 15)) lines = realloc(lines, (((new_num_lines) + 16)) * sizeof(char*));
-        lines[new_num_lines++] = malloc((strlen(line) + 1) * sizeof(char));
-        strcpy(lines[new_num_lines - 1], line);
+        lines[new_num_lines] = malloc((strlen(line) + 1) * sizeof(char));
+        strcpy(lines[new_num_lines++], line);
         EOF_reached = fgets(line, MAX_LINE_LENGTH, file) == NULL;
     }
     printf("%s\n", "absolute_path");
@@ -146,12 +146,13 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
     if (_Mode[0] == 'n') number_of_tabs--; // This number is increased in previous function call, so I turn it back.
     else if (_Mode[0] == 'f' || _Mode[0] == 'i' || _Mode[0] == 'd') number_of_tabs = 0;
     bool found = false;
+    bool inserted_or_deleted = false;
     while (token || (_Mode[0] == 't' || _Mode[0] == 'n')) {
         printf("salam\n");
         if (fgets(line, MAX_LINE_LENGTH, file) == NULL) {
             if (_Mode[0] == 'i') {
                 line[0] = '\0';
-                found = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
+                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
             }
             else if (fclose(file)) return 1;
             file = NULL;
@@ -163,7 +164,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
         for (int i = number_of_tabs - 1; i >= 0; i--) {
             if (line[i] != '\t') {
                 line[0] = '\0';
-                if (_Mode[0] == 'i') found = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
+                if (_Mode[0] == 'i') inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
                 file = NULL;
                 break;
             }
@@ -197,7 +198,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
             if ((_Mode[0] == 'i' || _Mode[0] == 'd') && token == NULL) {
                 line[0] = '\0';
                 if (_Mode[0] == 'i') token = token_copy;
-                found = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
+                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, number_of_lines, number_of_tabs, token, value_to_insert, line);
                 file = NULL;
                 break;
             }
@@ -217,7 +218,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
     }
     free(lines);
     free(element_copy);
-    return _Mode[0] == 'i' ? found : !found;
+    return !(found || inserted_or_deleted);
 }
 
 int find_minigit_directory() {
