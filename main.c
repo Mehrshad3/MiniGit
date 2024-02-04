@@ -71,8 +71,6 @@ int insert_or_delete(FILE* file, char* absolute_path, char** lines, int previous
     }
     else {
         do {
-            printf("token inside other function:%s\n", token);
-            printf("%d\n", number_of_tabs);
             if (!(new_num_lines & 15)) lines = realloc(lines, (((new_num_lines) + 16)) * sizeof(char*));
             char new_line[MAX_LINE_LENGTH];
             memset(new_line, '\t', number_of_tabs);
@@ -90,15 +88,12 @@ int insert_or_delete(FILE* file, char* absolute_path, char** lines, int previous
         } while (token);
     }
     while (!EOF_reached) {
-        printf(".%s\n", line);
         if (!(new_num_lines & 15)) lines = realloc(lines, (((new_num_lines) + 16)) * sizeof(char*));
         lines[new_num_lines] = malloc((strlen(line) + 1) * sizeof(char));
         strcpy(lines[new_num_lines++], line);
         EOF_reached = fgets(line, MAX_LINE_LENGTH, file) == NULL;
     }
-    printf("%s\n", "absolute_path");
     if (fclose(file)) return 1;
-    printf("%s\n", absolute_path);
     if (!(file = fopen(absolute_path, "w"))) return 1;
     for (int i = 0; i < new_num_lines; i++) {
         if (fputs(lines[i], file) == EOF) return 1;
@@ -148,7 +143,6 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
     bool found = false;
     bool inserted_or_deleted = false;
     while (token || (_Mode[0] == 't' || _Mode[0] == 'n')) {
-        printf("salam\n");
         if (fgets(line, MAX_LINE_LENGTH, file) == NULL) {
             if (_Mode[0] == 'i') {
                 line[0] = '\0';
@@ -159,8 +153,6 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
             break;
         }
         found = false;
-        printf("%d\n", number_of_tabs);
-        printf("%s", line);
         for (int i = number_of_tabs - 1; i >= 0; i--) {
             if (line[i] != '\t') {
                 line[0] = '\0';
@@ -177,13 +169,10 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
         else if (_Mode[0] == 'n') {
             if (line[number_of_tabs] != '\t') {
                 memmove(line, line + number_of_tabs, strlen(line + number_of_tabs) + 1);
-                printf("%d\n", number_of_tabs);
-                printf("%s\n", line);
                 found = true;
             }
         }
         else if (strncmp(line + number_of_tabs, token, strlen(token)) == 0) {
-            printf("token:%s", token);
             char* token_copy = token;
             bool EOL = false, element = false;
             if (line[number_of_tabs + strlen(token)] == '\n') {
@@ -208,8 +197,6 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
             lines[number_of_lines++] = malloc((strlen(line) + 1) * sizeof(char));
             strcpy(lines[number_of_lines - 1], line);
         }
-        printf("aleik\n");
-        printf("line: %s\ntoken: %s\n", line, token);
         if (found) number_of_tabs++;
         if (_Mode[0] == 't' || _Mode[0] == 'n' && found) break;
     }
