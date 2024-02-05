@@ -413,26 +413,33 @@ int run_config(int argc, char* const argv[]) {
 int run_add(int argc, char *const argv[]) {
     // TODO: handle command in non-root directories 
     char path[MAX_PATH_LENGTH];
+    bool multiple = false;
     if (argc < 3) {
         perror("please specify a file");
         return 1;
     }
-    chdir(proj_dir);
-    WIN32_FIND_DATA fdFile;
-    char spath[MAX_PATH_LENGTH];
-    sprintf(spath, "%s\\%s", cwd, argv[2]);
-    HANDLE handle;
-    if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) {
-        perror("file address is invalid");
+    if (!strcmp(argv[2], "-f")) multiple = true;
+    if (!multiple && argc > 3) {
+        perror("to add multiple files or directories use -f flag");
         return 1;
     }
-    TCHAR** lppPart = {NULL};
-    unsigned long retval = GetFullPathName(argv[2], sizeof(path), path, lppPart);
-    if (retval == 0) return 1;
-
-    FindClose(handle);
-    printf("%s\n", path + strlen(proj_dir) + 1);
-    return add_to_staging(path + strlen(proj_dir) + 1);
+    chdir(proj_dir);
+    WIN32_FIND_DATA fdFile;
+    HANDLE handle;
+    for (int i = 2 + (int)multiple; i < argc; i++) {
+        char spath[MAX_PATH_LENGTH];
+        sprintf(spath, "%s\\%s", cwd, argv[2]);
+        if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) {
+            perror("file address is invalid");
+            return 1;
+        }
+        TCHAR** lppPart = {NULL};
+        unsigned long retval = GetFullPathName(argv[2], sizeof(path), path, lppPart);
+        if (retval == 0) return 1;
+        FindClose(handle);
+        if (add_to_staging(path + strlen(proj_dir) + 1)) return 1;
+    }
+    return 0;
 }
 
 int add_to_staging(char *filepath) {
