@@ -410,18 +410,33 @@ int run_config(int argc, char* const argv[]) {
     printf("%s\n", cwd);
 }
 
-/*int run_add(int argc, char *const argv[]) {
+int run_add(int argc, char *const argv[]) {
     // TODO: handle command in non-root directories 
+    char path[MAX_PATH_LENGTH];
     if (argc < 3) {
         perror("please specify a file");
         return 1;
     }
+    chdir(proj_dir);
+    WIN32_FIND_DATA fdFile;
+    char spath[MAX_PATH_LENGTH];
+    sprintf(spath, "%s\\%s", cwd, argv[2]);
+    HANDLE handle;
+    if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) {
+        perror("file address is invalid");
+        return 1;
+    }
+    TCHAR** lppPart = {NULL};
+    unsigned long retval = GetFullPathName(argv[2], sizeof(path), path, lppPart);
+    if (retval == 0) return 1;
 
-    return add_to_staging(argv[2]);
+    FindClose(handle);
+    printf("%s\n", path + strlen(proj_dir) + 1);
+    return add_to_staging(path + strlen(proj_dir) + 1);
 }
 
 int add_to_staging(char *filepath) {
-    FILE *file = fopen(".neogit/staging", "r");
+    FILE *file = fopen("." PROGRAM_NAME "\\staging", "r");
     if (file == NULL) return 1;
     char line[MAX_LINE_LENGTH];
     while (fgets(line, sizeof(line), file) != NULL) {
@@ -436,7 +451,7 @@ int add_to_staging(char *filepath) {
     }
     fclose(file);
     
-    file = fopen(".neogit/staging","a");
+    file = fopen("." PROGRAM_NAME "\\staging","a");
     if (file == NULL) return 1;
 
     fprintf(file, "%s\n", filepath);
@@ -445,7 +460,7 @@ int add_to_staging(char *filepath) {
     return 0;
 }
 
-int run_reset(int argc, char *const argv[]) {
+/*int run_reset(int argc, char *const argv[]) {
     // TODO: handle command in non-root directories 
     if (argc < 3) {
         perror("please specify a file");
@@ -800,9 +815,10 @@ int main(int argc, char *argv[]) {
     else if (strcmp(argv[1], "config") == 0) {
         run_config(argc, argv);
     }
-    /* else if (strcmp(argv[1], "add") == 0) {
-        return 0;run_add(argc, argv);
-    } else if (strcmp(argv[1], "reset") == 0) {
+    else if (strcmp(argv[1], "add") == 0) {
+        run_add(argc, argv);
+    }
+    /*} else if (strcmp(argv[1], "reset") == 0) {
         return run_reset(argc, argv);
     } else if (strcmp(argv[1], "commit") == 0) {
         return run_commit(argc, argv);
