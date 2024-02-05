@@ -11,6 +11,9 @@ You can see the Persian documention of what I have to build as 1st phase (v1.0.0
     - init
     - Error when running again
     - Error in child directories
+- config
+    - name (global)
+    - email (global)
 
 ## Author
 This is the project of Fundamentals of Programming course in Sharif University of Technology

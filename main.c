@@ -12,6 +12,10 @@
 #define MAX_MESSAGE_LENGTH 1000
 #define MAX_PATH_LENGTH 1024 // literally it's 260, IDK why I'm setting this.
 
+#if MAX_FILENAME_LENGTH > MAX_PATH_LENGTH
+#error "MAX_FILENAME_LENGTH cannot be greater than MAX_PATH_LENGTH"
+#endif
+
 #define IS_WHITE_SPACE(_C) (_C == ' ' || _C == '\t' || _C == '\n' || _C == '\r' || _C == '\f' || _C == '\v')
 
 #define PROGRAM_NAME "MiniGit"
@@ -60,11 +64,11 @@ void replace_characters_in_string(char* string, char to_replace, char replace_wi
     }
 }
 
-int insert_or_delete(FILE* file, char* absolute_path, char** lines, int* number_of_lines, int number_of_tabs, char* token, char* value_to_insert, char line[MAX_LINE_LENGTH]) {
+int insert_or_delete(FILE* file, char* absolute_path, char** lines, int* number_of_lines, int number_of_tabs, char* token, char* value_to_insert, char line[MAX_LINE_LENGTH], char* _Mode) {
     int new_num_lines = *number_of_lines;
-    printf("we're in insert_or_delete funct.\n");
+    // printf("we're in insert_or_delete funct.\n");
     bool EOF_reached = false;
-    if (value_to_insert == NULL) { // _Mode[0] == 'd'
+    if (_Mode[0] == 'd') {
         bool has_tabs = true;
         while (has_tabs && !(EOF_reached = !fgets(line, MAX_LINE_LENGTH, file))) {
             has_tabs = true;
@@ -115,6 +119,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
     // TODO : add the ability to write to this function, and other modes
     // modes: 'f' for find, 'i' for insert and edit, 'd' to delete, 'n' to go to next subitem, 't' to go to first subitem, 'c' to close file
     // If second character or _Mode is g, then it'll change global variables.
+    // Unfortunately, line should always be passed to the function.
 
     static FILE* file = NULL;
     if (_Mode[0] == 'c') {
@@ -132,10 +137,10 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
             fclose(file);
         }
         if (_Mode[1] != 'g') {
-            sprintf(absolute_path , "%s\\." PROGRAM_NAME "\\%s", proj_dir, path);
+            if (path[1] != ':') sprintf(absolute_path , "%s\\." PROGRAM_NAME "\\%s", proj_dir, path);
+            else strcpy(absolute_path, path);
         }
-        else sprintf(absolute_path, "%s", GLOBAL_CONFIG);
-        printf("%s\n", absolute_path);
+        else strcpy(absolute_path, GLOBAL_CONFIG);
         unsigned long attribute = GetFileAttributes(absolute_path);
         if (attribute != INVALID_FILE_ATTRIBUTES) file_exists = true;
         if (!file_exists && _Mode[1] == 'g') {
@@ -148,11 +153,15 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
         }
         file = fopen(absolute_path, "r");
     }
+    // printf("absolute path: %s\n", absolute_path);
     char** lines = NULL;
     int number_of_lines = 0;
     if (file == NULL) return 1;
-    char* element_copy = (char*) malloc((strlen(element) + 1) * sizeof(char));
-    strcpy(element_copy, element);
+    char* element_copy = NULL;
+    if (element) {
+        element_copy = (char*) malloc((strlen(element) + 1) * sizeof(char));
+        strcpy(element_copy, element);
+    }
     char* token = strtok(element_copy, ".");
     if (_Mode[0] == 'n') number_of_tabs--; // This number is increased in previous function call, so I turn it back.
     else if (_Mode[0] == 'f' || _Mode[0] == 'i' || _Mode[0] == 'd') number_of_tabs = 0;
@@ -162,7 +171,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
         if (fgets(line, MAX_LINE_LENGTH, file) == NULL) {
             if (_Mode[0] == 'i') {
                 line[0] = '\0';
-                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, &number_of_lines, number_of_tabs, token, value_to_insert, line);
+                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, &number_of_lines, number_of_tabs, token, value_to_insert, line, _Mode);
             }
             else if (fclose(file)) return 1;
             file = NULL;
@@ -172,7 +181,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
         for (int i = number_of_tabs - 1; i >= 0; i--) {
             if (line[i] != '\t') {
                 line[0] = '\0';
-                if (_Mode[0] == 'i') inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, &number_of_lines, number_of_tabs, token, value_to_insert, line);
+                if (_Mode[0] == 'i') inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, &number_of_lines, number_of_tabs, token, value_to_insert, line, _Mode);
                 file = NULL;
                 break;
             }
@@ -203,7 +212,7 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
             if ((_Mode[0] == 'i' || _Mode[0] == 'd') && token == NULL) {
                 line[0] = '\0';
                 if (_Mode[0] == 'i') token = token_copy;
-                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, &number_of_lines, number_of_tabs, token, value_to_insert, line);
+                inserted_or_deleted = !insert_or_delete(file, absolute_path, lines, &number_of_lines, number_of_tabs, token, value_to_insert, line, _Mode);
                 file = NULL;
                 break;
             }
@@ -222,6 +231,8 @@ int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], ch
     }
     free(lines);
     free(element_copy);
+    // printf("line:%s\n", line);
+    // printf("found:%d\n", found);
     return !(found || inserted_or_deleted);
 }
 
@@ -287,13 +298,11 @@ int run_init(int argc, char * const argv[]) {
     fprintf(stdout, "username: %s\n", username);
     if (read_write_minigit(NULL, "user.email", email, NULL, "fg")) return 1;
     read_write_minigit(NULL, NULL, NULL, NULL, "c");
-    char string[MAX_LINE_LENGTH];
+    char string[MAX_PATH_LENGTH];
     char line[MAX_LINE_LENGTH];
-    char line2[MAX_LINE_LENGTH];
     sprintf(string, "projects.%s", cwd);
     replace_characters_in_string(string + 9, '.', '|');
-    line2[0] = '\0';
-    if (read_write_minigit(NULL, string, line, line2, "ig")) return 1;
+    if (read_write_minigit(NULL, string, line, NULL, "ig")) return 1;
     printf("success\n");
     if (CreateDirectory("." PROGRAM_NAME, NULL) == 0) return 1;
     if (!SetFileAttributes("." PROGRAM_NAME, FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN)) return 1;
@@ -327,8 +336,75 @@ int run_init(int argc, char * const argv[]) {
 }
 
 int run_config(int argc, char* const argv[]) {
-    bool global = !strcmp(argv[1], "-global");
-    if (getcwd(cwd, sizeof(cwd)) == NULL) return 1;
+    bool global = false;
+    if (argc >= 3) global = !strcmp(argv[2], "-global");
+    if (!global) {
+        if (find_minigit_directory()) return 1;
+    }
+    if (argc < 3 + (int)global) {
+        perror("please specify something to config.");
+        return 1;
+    }
+    char value[MAX_LINE_LENGTH];
+    char line[MAX_LINE_LENGTH];
+    if (argc == 3 + (int)global) {
+        value[0] = '\0';
+        if (!global) {
+            if (read_write_minigit("config", argv[2], line, value, "f")) {
+                perror("this config hasn't been set");
+            }
+            else printf("%s\n", line);
+        }
+        else {
+            if (read_write_minigit(NULL, argv[3], line, value, "fg")) {
+                perror("this config hasn't been set");
+            }
+            else printf("%s\n", line);
+        }
+    }
+    if (argc == 4 + (int)global) {
+        if (global) {
+            char line[MAX_LINE_LENGTH];
+            if (read_write_minigit(NULL, argv[3], line, argv[4], "ig")) return 1;
+            if (!read_write_minigit(NULL, "projects", line, NULL, "fg")) {
+                if (!read_write_minigit(NULL, NULL, line, NULL, "t")) {
+                    char** projects_to_override = NULL;
+                    int number_of_overrides = 0;
+                    do {
+                        char path[MAX_PATH_LENGTH];
+                        sprintf(path, "%s\\." PROGRAM_NAME, line);
+                        unsigned long attributes= GetFileAttributes(path);
+                        if (attributes != INVALID_FILE_ATTRIBUTES) {
+                            if (!(number_of_overrides & 15)) projects_to_override = realloc(projects_to_override, ((number_of_overrides + 16)) * sizeof(char*));
+                            projects_to_override[number_of_overrides] = (char*) malloc((strlen(line) + 1) * sizeof(char));
+                            strcpy(projects_to_override[number_of_overrides++], line);
+                        }
+                    } while (!read_write_minigit(NULL, NULL, line, NULL, "n"));
+                    printf("%d\n", number_of_overrides);
+                    for (int i = 0; i < number_of_overrides; i++) {
+                        char path[MAX_LINE_LENGTH];
+                        sprintf(path, "%s\\.MiniGit\\config", projects_to_override[i]);
+                        fprintf(stdout, "%s\n", path);
+                        if (read_write_minigit(path, argv[3], line, argv[4], "i")) {
+                            char error[MAX_MESSAGE_LENGTH];
+                            sprintf(error, "Project %s is corrupted", projects_to_override[i]);
+                            perror(error);
+                        }
+                    }
+                    for (int i = 0; i < number_of_overrides; i++) {
+                        char key[MAX_LINE_LENGTH];
+                        replace_characters_in_string(projects_to_override[i], '|', '.');
+                        sprintf(key, "projects.%s", projects_to_override[i]);
+                        if (read_write_minigit(NULL, key, line, NULL, "i")) return 1;
+                        free(projects_to_override[i]);
+                    }
+                    // TODO: increase performance of loop above by passing a file with mode "r+" to read_write_minigit function
+                    free(projects_to_override);
+                }
+            }
+        }
+        else perror("local configuration hasn't been implemented yet");
+    }
     printf("%s\n", cwd);
 }
 
@@ -670,6 +746,10 @@ int checkout_file(char *filepath, int commit_ID) {
 int main(int argc, char *argv[]) {
 
     if (argc < 2) {
+        char* argv2[] = {"main", "config", "-global", "user.name", "Mehr"};
+        return run_config(sizeof(argv2) / sizeof(argv2[0]), argv2);
+        //char* argv3[] = {"main", "init"};
+        //return run_init(sizeof(argv3) / sizeof(char*), argv3);
         fprintf(stdout, "too few arguments to program '" PROGRAM_NAME "'");
         return 1;
     }
