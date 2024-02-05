@@ -403,7 +403,9 @@ int run_config(int argc, char* const argv[]) {
                 }
             }
         }
-        else perror("local configuration hasn't been implemented yet");
+        else {
+            if (read_write_minigit("config", argv[2], line, argv[3], "i")) return 1;
+        }
     }
     printf("%s\n", cwd);
 }
@@ -746,8 +748,8 @@ int checkout_file(char *filepath, int commit_ID) {
 int main(int argc, char *argv[]) {
 
     if (argc < 2) {
-        char* argv2[] = {"main", "config", "-global", "user.name", "Mehr"};
-        return run_config(sizeof(argv2) / sizeof(argv2[0]), argv2);
+        //char* argv2[] = {"main", "config", "-global", "user.name", "Mehr"};
+        //return run_config(sizeof(argv2) / sizeof(argv2[0]), argv2);
         //char* argv3[] = {"main", "init"};
         //return run_init(sizeof(argv3) / sizeof(char*), argv3);
         fprintf(stdout, "too few arguments to program '" PROGRAM_NAME "'");
