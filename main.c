@@ -11,6 +11,7 @@
 #define MAX_LINE_LENGTH 1000
 #define MAX_MESSAGE_LENGTH 1000
 #define MAX_PATH_LENGTH 1024 // literally it's 260, IDK why I'm setting this.
+#define MAX_COMMAND_NUMBER 200
 
 #if MAX_FILENAME_LENGTH > MAX_PATH_LENGTH
 #error "MAX_FILENAME_LENGTH cannot be greater than MAX_PATH_LENGTH"
@@ -21,6 +22,12 @@
 #define PROGRAM_NAME "MiniGit"
 #define USERNAME "Asus"
 #define GLOBAL_CONFIG "C:\\Users\\" USERNAME "\\." PROGRAM_NAME "Config"
+
+typedef struct {
+    command_node* previous;
+    char* arg;
+    command_node* next;
+} command_node;
 
 char cwd[MAX_PATH_LENGTH];
 char proj_dir[MAX_PATH_LENGTH];
@@ -743,6 +750,24 @@ int checkout_file(char *filepath, int commit_ID) {
     fclose(write_file);
 
     return 0;
+}*/
+
+int is_valid_alias(int argc, char* argv[]) {
+    return 1; // TODO: implement it
+}
+
+void free_commands(int argc, char* argv) {
+    for (int i = 0; i < argc; i++) {
+        free(argv[i]);
+    }
+    free(argv);
+}
+
+/*struct COMMANDS expand_alias(int argc, char* argv[]) {
+    struct COMMANDS INVALID_RETURN_VALUE = {-1, NULL};
+    if (!is_valid_alias(argc, argv)) return INVALID_RETURN_VALUE;
+    char line[MAX_LINE_LENGTH];
+    //if (read_write_minigit("config", "alias", ))
 }*/
 
 int main(int argc, char *argv[]) {
