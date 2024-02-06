@@ -303,7 +303,6 @@ int run_init(int argc, char * const argv[]) {
     sprintf(string, "projects.%s", cwd);
     replace_characters_in_string(string + 9, '.', '|');
     if (read_write_minigit(NULL, string, line, NULL, "ig")) return 1;
-    printf("success\n");
     if (CreateDirectory("." PROGRAM_NAME, NULL) == 0) return 1;
     if (!SetFileAttributes("." PROGRAM_NAME, FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN)) return 1;
     strcpy(proj_dir, cwd);
@@ -443,29 +442,35 @@ int run_add(int argc, char *const argv[]) {
     else {
         int depth = 1;
         if (argc > 3) sscanf(argv[4], "%d", &depth);
-        return add_to_staging(proj_dir, depth);
+        char fullfilepath[MAX_PATH_LENGTH];
+        strcpy(fullfilepath, proj_dir);
+        return add_to_staging(fullfilepath, depth);
     }
 }
 
 int add_to_staging(char *fullfilepath, int depth) {
-    if (GetFileAttributes(fullfilepath) & FILE_ATTRIBUTE_DIRECTORY & ~FILE_ATTRIBUTE_HIDDEN && depth >= 0) {
+    int return_value = 0;
+    unsigned long attributes = GetFileAttributes(fullfilepath);
+    if (attributes & FILE_ATTRIBUTE_HIDDEN) return 1;
+    if (attributes & FILE_ATTRIBUTE_DIRECTORY) {
+        if (depth < 0) return 0;
         HANDLE handle;
         WIN32_FIND_DATA fdFile;
         char spath[MAX_PATH_LENGTH];
         sprintf(spath, "%s\\*", fullfilepath);
-        printf("%s\n", fullfilepath);
         if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) return 1;
-        if (!FindNextFile(spath, &fdFile)) return 1;
+        if (!FindNextFile(handle, &fdFile)) return 1;
         while (FindNextFile(handle, &fdFile)) {
-            printf("%s\n", fdFile.cFileName);
             int len = strlen(fullfilepath);
             fullfilepath[len] = '\\';
             strcpy(fullfilepath + len + 1, fdFile.cFileName);
-            if (add_to_staging(fullfilepath, depth - 1)) return 1;
+            if (!(fdFile.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
+                if (add_to_staging(fullfilepath, depth - 1)) return_value = 1;
+            }
             fullfilepath[len] = '\0';
         }
         FindClose(handle);
-        return 0;
+        return return_value;
     }
     char full_staging_path[MAX_PATH_LENGTH];
     strcpy(full_staging_path, proj_dir);
@@ -499,7 +504,6 @@ int run_alias(int argc, char* argv[]) {
     char key[MAX_LINE_LENGTH];
     char line[MAX_LINE_LENGTH];
     sprintf(key, "alias.%s", argv[1]);
-    printf("%s\n", key);
     if (!read_write_minigit("\\config", key, line, NULL, "f")) {
         system(line);
     }
@@ -812,6 +816,8 @@ int main(int argc, char *argv[]) {
         //return run_config(sizeof(argv2) / sizeof(argv2[0]), argv2);
         //char* argv3[] = {"main", "init"};
         //return run_init(sizeof(argv3) / sizeof(char*), argv3);
+        char* argv4[] = {"main", "add", "-n"};
+        return run_add(sizeof(argv4) / sizeof(argv4[0]), argv4);
         fprintf(stdout, "too few arguments to program '" PROGRAM_NAME "'");
         return 1;
     }
