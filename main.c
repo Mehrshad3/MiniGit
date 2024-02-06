@@ -332,7 +332,9 @@ int run_init(int argc, char * const argv[]) {
     fclose(file);
 
     file = fopen("." PROGRAM_NAME "\\branches", "w");
-    fprintf(file, "main");
+    fprintf(file, "main\n");
+
+    file = fopen("." PROGRAM_NAME "\\log", "w");
     fclose(file);
 
     return 0;
@@ -510,7 +512,30 @@ int run_alias(int argc, char* argv[]) {
     sprintf(key, "alias.%s", argv[1]);
     if (!read_write_minigit("\\config", key, line, NULL, "f")) {
         system(line);
+        return 0;
     }
+    else {
+        perror("invalid command");
+        return 1;
+    }
+}
+
+int cat(char* prefix, char* path) {
+    FILE* file = fopen(path, "r");
+    if (file == NULL) return 1;
+    char line[MAX_LINE_LENGTH];
+    while (fgets(line, sizeof(line), file) != NULL) {
+        int length = strlen(line);
+
+        // remove '\n'
+        if (length > 0 && line[length - 1] == '\n') {
+            line[length - 1] = '\0';
+        }
+
+        printf("%s%s\n", prefix, line);
+    }
+    fclose(file);
+    return 0;
 }
 
 int run_branch(int argc, char* argv[]) {
@@ -518,21 +543,7 @@ int run_branch(int argc, char* argv[]) {
     sprintf(path, "%s\\." PROGRAM_NAME "\\branches", proj_dir);
     printf("%s\n", path);
     if (argc < 3) {
-        FILE *file = fopen(path, "r");
-        if (file == NULL) return 1;
-        char line[MAX_LINE_LENGTH];
-        while (fgets(line, sizeof(line), file) != NULL) {
-            int length = strlen(line);
-
-            // remove '\n'
-            if (length > 0 && line[length - 1] == '\n') {
-                line[length - 1] = '\0';
-            }
-
-            printf("branch name: %s\n", line);
-        }
-        fclose(file);
-        return 0;
+        return cat("branch name: ", path);
     }
     FILE *file = fopen(path, "r");
     if (file == NULL) return 1;
@@ -555,9 +566,15 @@ int run_branch(int argc, char* argv[]) {
 
     file = fopen(path, "a");
     if (file == NULL) return 1;
-    fprintf(file, argv[2]);
+    fprintf(file, "%s\n", argv[2]);
     fclose(file);
     return 0;
+}
+
+int run_log(int argc, char* argv[]) {
+    char path[MAX_PATH_LENGTH];
+    sprintf(path, "%s\\.%s\\log", proj_dir, PROGRAM_NAME);
+    return cat("", path);
 }
 
 /*int run_reset(int argc, char *const argv[]) {
@@ -594,7 +611,7 @@ int remove_from_staging(char *filepath) {
     remove(".neogit/staging");
     rename(".neogit/tmp_staging", ".neogit/staging");
     return 0;
-}
+}*/
 
 int run_commit(int argc, char * const argv[]) {
     if (argc < 4) {
@@ -607,8 +624,11 @@ int run_commit(int argc, char * const argv[]) {
 
     int commit_ID = inc_last_commit_ID();
     if (commit_ID == -1) return 1;
+
+    char full_staging_path[MAX_PATH_LENGTH];
+    sprintf(full_staging_path, "%s.\\" PROGRAM_NAME "staging", proj_dir);
     
-    FILE *file = fopen(".neogit/staging", "r");
+    FILE *file = fopen(full_staging_path, "r");
     if (file == NULL) return 1;
     char line[MAX_LINE_LENGTH];
     while (fgets(line, sizeof(line), file) != NULL) {
@@ -621,13 +641,16 @@ int run_commit(int argc, char * const argv[]) {
         
         if (!check_file_directory_exists(line)) {
             char dir_path[MAX_FILENAME_LENGTH];
-            strcpy(dir_path, ".neogit/files/");
+            strcpy(dir_path, proj_dir);
+            strcat(dir_path, "\\." PROGRAM_NAME "\\files\\");
             strcat(dir_path, line);
-            if (mkdir(dir_path, 0755) != 0) return 1;
+            if (CreateDirectory(dir_path, NULL) == 0) return 1;
+            if (mkdir(dir_path) != 0) return 1;
+            if (!SetFileAttributes(dir_path, FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN)) return 1;
         }
         printf("commit %s\n", line);
-        commit_staged_file(commit_ID, line);
-        track_file(line);
+        //commit_staged_file(commit_ID, line);
+        // track_file(line);
     }
     fclose(file); 
     
@@ -636,7 +659,7 @@ int run_commit(int argc, char * const argv[]) {
     if (file == NULL) return 1;
     fclose(file);
 
-    create_commit_file(commit_ID, message);
+    //create_commit_file(commit_ID, message);
     fprintf(stdout, "commit successfully with commit ID %d", commit_ID);
     
     return 0;
@@ -644,10 +667,15 @@ int run_commit(int argc, char * const argv[]) {
 
 // returns new commit_ID
 int inc_last_commit_ID() {
-    FILE *file = fopen(".neogit/config", "r");
+    char path[MAX_PATH_LENGTH];
+    sprintf(path, "%s.\\" PROGRAM_NAME "config", proj_dir);
+    FILE *file = fopen(path, "r");
     if (file == NULL) return -1;
+
+    char tmp_path[MAX_PATH_LENGTH];
+    sprintf(tmp_path, "%s.\\" PROGRAM_NAME "tmp_config", proj_dir);
     
-    FILE *tmp_file = fopen(".neogit/tmp_config", "w");
+    FILE *tmp_file = fopen(tmp_path, "w");
     if (tmp_file == NULL) return -1;
 
     int last_commit_ID;
@@ -663,13 +691,25 @@ int inc_last_commit_ID() {
     fclose(file);
     fclose(tmp_file);
 
-    remove(".neogit/config");
-    rename(".neogit/tmp_config", ".neogit/config");
+    remove(path);
+    rename(tmp_path, path);
     return last_commit_ID;
 }
 
+int run_pre_commit(int argc, char* argv[]) {
+    char* hooks[] = {"todo-check", "eof-blank-space", "format-check", "balance-braces", "indentation-check", "static-error-check", "file-size-check", "character-limit", "time-limit"};
+    if (argc == 2) return 1;
+    if (argc == 4 && !strcmp(argv[2], "hooks") && !strcmp(argv[3], "list")) {
+        for (int i = 0; i < sizeof(hooks) / sizeof(char*); i++) {
+            printf("%s\n", hooks[i]);
+        }
+        return 0;
+    }
+    return 1;
+}
+
 bool check_file_directory_exists(char *filepath) {
-    DIR *dir = opendir(".neogit/files");
+    /*DIR *dir = opendir(".neogit/files");
     struct dirent *entry;
     if (dir == NULL) {
         perror("Error opening current directory");
@@ -678,12 +718,12 @@ bool check_file_directory_exists(char *filepath) {
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type == DT_DIR && strcmp(entry->d_name, filepath) == 0) return true;
     }
-    closedir(dir);
+    closedir(dir);*/
 
-    return false;
+    return true;
 }
 
-int commit_staged_file(int commit_ID, char* filepath) {
+/*int commit_staged_file(int commit_ID, char* filepath) {
     FILE *read_file, *write_file;
     char read_path[MAX_FILENAME_LENGTH];
     strcpy(read_path, filepath);
@@ -919,6 +959,12 @@ int main(int argc, char *argv[]) {
     }
     else if (strcmp(argv[1], "branch") == 0) {
         run_branch(argc, argv);
+    }
+    else if (strcmp(argv[1], "log") == 0) {
+        run_log(argc, argv);
+    }
+    else if (strcmp(argv[1], "pre-commit") == 0) {
+        run_pre_commit(argc, argv);
     }
     else {
         run_alias(argc, argv);
