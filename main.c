@@ -337,6 +337,9 @@ int run_init(int argc, char * const argv[]) {
     file = fopen("." PROGRAM_NAME "\\log", "w");
     fclose(file);
 
+    file = fopen("." PROGRAM_NAME "\\hooks", "w");
+    fclose(file);
+
     return 0;
 }
 
@@ -441,13 +444,13 @@ int run_add(int argc, char *const argv[]) {
             unsigned long retval = GetFullPathName(argv[i], sizeof(path), path, NULL);
             if (retval == 0) return 1;
             FindClose(handle);
-            return_value = return_value && (add_to_staging(path, MAX_PATH_LENGTH));
+            return_value = (add_to_staging(path, MAX_PATH_LENGTH)) || return_value;
         }
         return return_value;
     }
     else {
         int depth = 1;
-        if (argc > 3) sscanf(argv[4], "%d", &depth);
+        if (argc > 3) sscanf(argv[3], "%d", &depth);
         char fullfilepath[MAX_PATH_LENGTH];
         strcpy(fullfilepath, proj_dir);
         return add_to_staging(fullfilepath, depth);
@@ -567,6 +570,38 @@ int run_branch(int argc, char* argv[]) {
     file = fopen(path, "a");
     if (file == NULL) return 1;
     fprintf(file, "%s\n", argv[2]);
+    fclose(file);
+    return 0;
+}
+
+int branch_already_added() {
+    perror("branch already exists");
+    return 1;
+}
+
+int add_to_minigit_file(char* path, char* value_to_insert, int (*already_added)()) {
+    char fullpath[MAX_PATH_LENGTH];
+    if (path[1] == ':') sprintf(fullpath, path);
+    else sprintf(fullpath, "%s\\." PROGRAM_NAME "\\%s", proj_dir, path);
+    printf("%s\n", fullpath);
+    FILE *file = fopen(fullpath, "r");
+    if (file == NULL) return 1;
+    char line[MAX_LINE_LENGTH];
+    while (fgets(line, sizeof(line), file) != NULL) {
+        int length = strlen(line);
+
+        // remove '\n'
+        if (length > 0 && line[length - 1] == '\n') {
+            line[length - 1] = '\0';
+        }
+
+        if (strcmp(value_to_insert, line) == 0) return already_added ? (*already_added)() : 0;
+    }
+    fclose(file);
+
+    file = fopen(fullpath, "a");
+    if (file == NULL) return 1;
+    fprintf(file, "%s\n", value_to_insert);
     fclose(file);
     return 0;
 }
@@ -705,6 +740,27 @@ int run_pre_commit(int argc, char* argv[]) {
         }
         return 0;
     }
+    if (argc >= 4 && !strcmp(argv[2], "add") && !strcmp(argv[3], "hook")) {
+        if (argc == 4) {
+            perror("please specify a hook id");
+            return 1;
+        }
+        bool valid_hook = false;
+        for (int i = 0; i < sizeof(hooks) / sizeof(char*); i++) {
+            if (!strcmp(hooks[i], argv[4])) {
+                valid_hook = true;
+                break;
+            }
+        }
+        if (!valid_hook) return 1;
+        return add_to_minigit_file(argv[4], "", NULL);
+    }
+    if (argc >= 4 && !strcmp(argv[2], "applied") && !strcmp(argv[3], "hooks")) {
+        char path[MAX_PATH_LENGTH];
+        sprintf(path, "%s\\." PROGRAM_NAME "\\hooks", proj_dir);
+        cat("", path);
+        return 0;
+    }
     return 1;
 }
 
@@ -723,7 +779,7 @@ bool check_file_directory_exists(char *filepath) {
     return true;
 }
 
-/*int commit_staged_file(int commit_ID, char* filepath) {
+int commit_staged_file(int commit_ID, char* filepath) {
     FILE *read_file, *write_file;
     char read_path[MAX_FILENAME_LENGTH];
     strcpy(read_path, filepath);
@@ -753,7 +809,7 @@ bool check_file_directory_exists(char *filepath) {
     return 0;
 }
 
-int track_file(char *filepath) {
+/*int track_file(char *filepath) {
     if (is_tracked(filepath)) return 0;
 
     FILE *file = fopen(".neogit/tracks", "a");
@@ -905,10 +961,9 @@ int main(int argc, char *argv[]) {
     if (argc < 2) {
         //char* argv2[] = {"main", "config", "-global", "user.name", "Mehr"};
         //return run_config(sizeof(argv2) / sizeof(argv2[0]), argv2);
-        //char* argv3[] = {"main", "init"};
+        char* argv3[] = {"main", "pre-commit", "add", "hook", "eof-blank-space"};
+        
         //return run_init(sizeof(argv3) / sizeof(char*), argv3);
-        char* argv4[] = {"main", "add", "-n"};
-        return run_add(sizeof(argv4) / sizeof(argv4[0]), argv4);
         fprintf(stdout, "too few arguments to program '" PROGRAM_NAME "'");
         return 1;
     }
@@ -965,6 +1020,8 @@ int main(int argc, char *argv[]) {
     }
     else if (strcmp(argv[1], "pre-commit") == 0) {
         run_pre_commit(argc, argv);
+    } else if (strcmp(argv[1], "commit") == 0) {
+        return run_commit(argc, argv);
     }
     else {
         run_alias(argc, argv);
