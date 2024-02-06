@@ -606,6 +606,40 @@ int add_to_minigit_file(char* path, char* value_to_insert, int (*already_added)(
     return 0;
 }
 
+int remove_hook(char* value_to_remove, int (*doesnt_exist)()) {
+    char fullpath[MAX_PATH_LENGTH];
+    sprintf(fullpath, "%s\\." PROGRAM_NAME "\\hooks", proj_dir);
+    FILE *file = fopen(fullpath, "r");
+    char tmp_path[MAX_PATH_LENGTH];
+    sprintf(tmp_path, "%s\\." PROGRAM_NAME "\\tmp_hooks", proj_dir);
+    
+    bool removed = false;
+
+    FILE *tmp_file = fopen(tmp_path, "w");
+    if (tmp_file == NULL) return -1;
+    char line[MAX_LINE_LENGTH];
+    while (fgets(line, sizeof(line), file) != NULL) {
+        int length = strlen(line);
+        if (length > 0 && line[length - 1] == '\n') {
+            line[length - 1] = '\0';
+        }
+        if (strcmp(line, value_to_remove) != 0) {
+            fputs(line, tmp_file);
+        }
+        else removed = true;
+    }
+    fclose(file);
+    fclose(tmp_file);
+    remove(fullpath);
+    rename(tmp_path, fullpath);
+    if (!removed) {
+        if (doesnt_exist) {
+            return doesnt_exist();
+        }
+    }
+    return 0;
+}
+
 int run_log(int argc, char* argv[]) {
     char path[MAX_PATH_LENGTH];
     sprintf(path, "%s\\.%s\\log", proj_dir, PROGRAM_NAME);
@@ -733,14 +767,16 @@ int inc_last_commit_ID() {
 
 int run_pre_commit(int argc, char* argv[]) {
     char* hooks[] = {"todo-check", "eof-blank-space", "format-check", "balance-braces", "indentation-check", "static-error-check", "file-size-check", "character-limit", "time-limit"};
-    if (argc == 2) return 1;
+    if (argc == 2) {
+        
+    }
     if (argc == 4 && !strcmp(argv[2], "hooks") && !strcmp(argv[3], "list")) {
         for (int i = 0; i < sizeof(hooks) / sizeof(char*); i++) {
             printf("%s\n", hooks[i]);
         }
         return 0;
     }
-    if (argc >= 4 && !strcmp(argv[2], "add") && !strcmp(argv[3], "hook")) {
+    else if (argc >= 4 && !strcmp(argv[2], "add") && !strcmp(argv[3], "hook")) {
         if (argc == 4) {
             perror("please specify a hook id");
             return 1;
@@ -755,11 +791,14 @@ int run_pre_commit(int argc, char* argv[]) {
         if (!valid_hook) return 1;
         return add_to_minigit_file(argv[4], "", NULL);
     }
-    if (argc >= 4 && !strcmp(argv[2], "applied") && !strcmp(argv[3], "hooks")) {
+    else if (argc >= 4 && !strcmp(argv[2], "applied") && !strcmp(argv[3], "hooks")) {
         char path[MAX_PATH_LENGTH];
         sprintf(path, "%s\\." PROGRAM_NAME "\\hooks", proj_dir);
         cat("", path);
         return 0;
+    }
+    else if (argc >= 4 && !strcmp(argv[2], "remove") && !strcmp(argv[3], "hook")) {
+        remove_hook(argv[4], NULL);
     }
     return 1;
 }
@@ -784,7 +823,7 @@ int commit_staged_file(int commit_ID, char* filepath) {
     char read_path[MAX_FILENAME_LENGTH];
     strcpy(read_path, filepath);
     char write_path[MAX_FILENAME_LENGTH];
-    strcpy(write_path, ".neogit/files/");
+    strcpy(write_path, "." PROGRAM_NAME "\\files\\");
     strcat(write_path, filepath);
     strcat(write_path, "/");
     char tmp[10];
