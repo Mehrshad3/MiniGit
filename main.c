@@ -414,36 +414,50 @@ int run_add(int argc, char *const argv[]) {
     // TODO: handle command in non-root directories 
     char path[MAX_PATH_LENGTH];
     bool multiple = false;
+    bool flag_n = false;
+    bool return_value = true;
     if (argc < 3) {
         perror("please specify a file");
         return 1;
     }
     if (!strcmp(argv[2], "-f")) multiple = true; // This flag is completely formality
+    if (!strcmp(argv[2], "-n")) flag_n = true;
     WIN32_FIND_DATA fdFile;
     HANDLE handle;
-    for (int i = 2 + (int)multiple; i < argc; i++) {
-        char spath[MAX_PATH_LENGTH];
-        sprintf(spath, "%s\\%s", cwd, argv[i]);
-        if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) {
-            perror("file address is invalid");
-            return 1;
+    if (!flag_n) {
+        for (int i = 2 + (int)multiple; i < argc; i++) {
+            char spath[MAX_PATH_LENGTH];
+            sprintf(spath, "%s\\%s", cwd, argv[i]);
+            if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) {
+                char error_message[MAX_MESSAGE_LENGTH];
+                sprintf(error_message, "file %s is doesn't exist", argv[i]);
+                perror(error_message);
+            }
+            unsigned long retval = GetFullPathName(argv[i], sizeof(path), path, NULL);
+            if (retval == 0) return 1;
+            FindClose(handle);
+            return_value = return_value && (add_to_staging(path, MAX_PATH_LENGTH));
         }
-        unsigned long retval = GetFullPathName(argv[i], sizeof(path), path, NULL);
-        if (retval == 0) return 1;
-        FindClose(handle);
-        if (add_to_staging(path, MAX_PATH_LENGTH)) return 1;
+        return return_value;
     }
-    return 0;
+    else {
+        int depth = 1;
+        if (argc > 3) sscanf(argv[4], "%d", &depth);
+        return add_to_staging(proj_dir, depth);
+    }
 }
 
 int add_to_staging(char *fullfilepath, int depth) {
-    if (GetFileAttributes(fullfilepath) & FILE_ATTRIBUTE_DIRECTORY) {
+    if (GetFileAttributes(fullfilepath) & FILE_ATTRIBUTE_DIRECTORY & ~FILE_ATTRIBUTE_HIDDEN && depth >= 0) {
         HANDLE handle;
         WIN32_FIND_DATA fdFile;
         char spath[MAX_PATH_LENGTH];
         sprintf(spath, "%s\\*", fullfilepath);
+        printf("%s\n", fullfilepath);
         if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) return 1;
+        if (!FindNextFile(spath, &fdFile)) return 1;
         while (FindNextFile(handle, &fdFile)) {
+            printf("%s\n", fdFile.cFileName);
             int len = strlen(fullfilepath);
             fullfilepath[len] = '\\';
             strcpy(fullfilepath + len + 1, fdFile.cFileName);
@@ -479,6 +493,15 @@ int add_to_staging(char *fullfilepath, int depth) {
     fclose(file);
 
     return 0;
+}
+
+int run_alias(int argc, char* argv[]) {
+    char key[MAX_LINE_LENGTH];
+    char line[MAX_LINE_LENGTH];
+    sprintf(key, "alias.%s", argv[1]);
+    if (!read_write_minigit("\\." PROGRAM_NAME "\\config", key, line, NULL, "f")) {
+        system("%s\n", line);
+    }
 }
 
 /*int run_reset(int argc, char *const argv[]) {
@@ -838,6 +861,9 @@ int main(int argc, char *argv[]) {
     }
     else if (strcmp(argv[1], "add") == 0) {
         run_add(argc, argv);
+    }
+    else {
+        run_alias(argc, argv);
     }
     /*} else if (strcmp(argv[1], "reset") == 0) {
         return run_reset(argc, argv);
