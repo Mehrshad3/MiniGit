@@ -14,6 +14,21 @@ You can see the Persian documention of what I have to build as 1st phase (v1.0.0
 - config
     - name
     - email
+- Alias
+    - alias
+    - global
+- add
+    - file
+    - <span style="color:#3D85C6;"> directory </span>
+    - -f
+    - -n
+    - wildcard
+- branch
+    - create branch
+    - list
+- <span style="color:#3D85C6;"> pre-commit </span>
+    - <span style="color:#3D85C6;"> list </span>
+    - <span style="color:#3D85C6;"> add </span>
 
 ## Author
 This is the project of Fundamentals of Programming course in Sharif University of Technology
