@@ -331,6 +331,10 @@ int run_init(int argc, char * const argv[]) {
     file = fopen("." PROGRAM_NAME "\\tracks", "w");
     fclose(file);
 
+    file = fopen("." PROGRAM_NAME "\\branches", "w");
+    fprintf(file, "main");
+    fclose(file);
+
     return 0;
 }
 
@@ -507,6 +511,53 @@ int run_alias(int argc, char* argv[]) {
     if (!read_write_minigit("\\config", key, line, NULL, "f")) {
         system(line);
     }
+}
+
+int run_branch(int argc, char* argv[]) {
+    char path[MAX_PATH_LENGTH];
+    sprintf(path, "%s\\." PROGRAM_NAME "\\branches", proj_dir);
+    printf("%s\n", path);
+    if (argc < 3) {
+        FILE *file = fopen(path, "r");
+        if (file == NULL) return 1;
+        char line[MAX_LINE_LENGTH];
+        while (fgets(line, sizeof(line), file) != NULL) {
+            int length = strlen(line);
+
+            // remove '\n'
+            if (length > 0 && line[length - 1] == '\n') {
+                line[length - 1] = '\0';
+            }
+
+            printf("branch name: %s\n", line);
+        }
+        fclose(file);
+        return 0;
+    }
+    FILE *file = fopen(path, "r");
+    if (file == NULL) return 1;
+    char line[MAX_LINE_LENGTH];
+    while (fgets(line, sizeof(line), file) != NULL) {
+        int length = strlen(line);
+
+        // remove '\n'
+        if (length > 0 && line[length - 1] == '\n') {
+            line[length - 1] = '\0';
+        }
+
+        if (strcmp(argv[2], line) == 0) {
+            perror("branch already exists");
+            fclose(file);
+            return 1;
+        }
+    }
+    fclose(file);
+
+    file = fopen(path, "a");
+    if (file == NULL) return 1;
+    fprintf(file, argv[2]);
+    fclose(file);
+    return 0;
 }
 
 /*int run_reset(int argc, char *const argv[]) {
@@ -865,6 +916,9 @@ int main(int argc, char *argv[]) {
     }
     else if (strcmp(argv[1], "add") == 0) {
         run_add(argc, argv);
+    }
+    else if (strcmp(argv[1], "branch") == 0) {
+        run_branch(argc, argv);
     }
     else {
         run_alias(argc, argv);
