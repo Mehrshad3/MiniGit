@@ -30,7 +30,7 @@ void print_command(int argc, char * const argv[]);
 int run_init(int argc, char * const argv[]);
 
 int run_add(int argc, char * const argv[]);
-int add_to_staging(char *filepath);
+int add_to_staging(char *filepath, int depth);
 
 int run_reset(int argc, char * const argv[]);
 int remove_from_staging(char *filepath);
@@ -418,32 +418,46 @@ int run_add(int argc, char *const argv[]) {
         perror("please specify a file");
         return 1;
     }
-    if (!strcmp(argv[2], "-f")) multiple = true;
-    if (!multiple && argc > 3) {
-        perror("to add multiple files or directories use -f flag");
-        return 1;
-    }
-    chdir(proj_dir);
+    if (!strcmp(argv[2], "-f")) multiple = true; // This flag is completely formality
     WIN32_FIND_DATA fdFile;
     HANDLE handle;
     for (int i = 2 + (int)multiple; i < argc; i++) {
         char spath[MAX_PATH_LENGTH];
-        sprintf(spath, "%s\\%s", cwd, argv[2]);
+        sprintf(spath, "%s\\%s", cwd, argv[i]);
         if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) {
             perror("file address is invalid");
             return 1;
         }
-        TCHAR** lppPart = {NULL};
-        unsigned long retval = GetFullPathName(argv[2], sizeof(path), path, lppPart);
+        unsigned long retval = GetFullPathName(argv[i], sizeof(path), path, NULL);
         if (retval == 0) return 1;
         FindClose(handle);
-        if (add_to_staging(path + strlen(proj_dir) + 1)) return 1;
+        if (add_to_staging(path, MAX_PATH_LENGTH)) return 1;
     }
     return 0;
 }
 
-int add_to_staging(char *filepath) {
-    FILE *file = fopen("." PROGRAM_NAME "\\staging", "r");
+int add_to_staging(char *fullfilepath, int depth) {
+    if (GetFileAttributes(fullfilepath) & FILE_ATTRIBUTE_DIRECTORY) {
+        HANDLE handle;
+        WIN32_FIND_DATA fdFile;
+        char spath[MAX_PATH_LENGTH];
+        sprintf(spath, "%s\\*", fullfilepath);
+        if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) return 1;
+        while (FindNextFile(handle, &fdFile)) {
+            int len = strlen(fullfilepath);
+            fullfilepath[len] = '\\';
+            strcpy(fullfilepath + len + 1, fdFile.cFileName);
+            if (add_to_staging(fullfilepath, depth - 1)) return 1;
+            fullfilepath[len] = '\0';
+        }
+        FindClose(handle);
+        return 0;
+    }
+    char full_staging_path[MAX_PATH_LENGTH];
+    strcpy(full_staging_path, proj_dir);
+    strcat(full_staging_path, "\\." PROGRAM_NAME "\\staging");
+    char* filepath = fullfilepath + strlen(proj_dir) + 1;
+    FILE *file = fopen(full_staging_path, "r");
     if (file == NULL) return 1;
     char line[MAX_LINE_LENGTH];
     while (fgets(line, sizeof(line), file) != NULL) {
