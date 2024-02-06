@@ -500,9 +500,7 @@ int run_alias(int argc, char* argv[]) {
     char line[MAX_LINE_LENGTH];
     sprintf(key, "alias.%s", argv[1]);
     printf("%s\n", key);
-    printf("\\." PROGRAM_NAME "\\config");
     if (!read_write_minigit("\\config", key, line, NULL, "f")) {
-        printf("%s\n", line);
         system(line);
     }
 }
@@ -852,11 +850,8 @@ int main(int argc, char *argv[]) {
             if (!strcmp(s3, "NULL")) s3 = NULL;
             if (!strcmp(s4, "NULL")) s4 = NULL;
             int failure = read_write_minigit(s1, s2, line, s3, s4);
-            printf("%d\n", failure);
-            printf("%.40s\n", line);
         } while(true);
         read_write_minigit(NULL, NULL, NULL, NULL, "c");
-        printf("%s\n", line);
         return 0;
     }
     else if (strcmp(argv[1], "config") == 0) {
