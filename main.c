@@ -499,8 +499,11 @@ int run_alias(int argc, char* argv[]) {
     char key[MAX_LINE_LENGTH];
     char line[MAX_LINE_LENGTH];
     sprintf(key, "alias.%s", argv[1]);
-    if (!read_write_minigit("\\." PROGRAM_NAME "\\config", key, line, NULL, "f")) {
-        system("%s\n", line);
+    printf("%s\n", key);
+    printf("\\." PROGRAM_NAME "\\config");
+    if (!read_write_minigit("\\config", key, line, NULL, "f")) {
+        printf("%s\n", line);
+        system(line);
     }
 }
 
