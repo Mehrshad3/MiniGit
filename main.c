@@ -61,6 +61,7 @@ int track_file(char *filepath);
 bool is_tracked(char *filepath);
 int create_commit_file(int commit_ID, char *message);
 int find_file_last_commit(char* filepath);
+int configure_commit_message_shortcut(int argc, char* const argv[]);
 
 int run_checkout(int argc, char *const argv[]);
 int find_file_last_change_before_commit(char *filepath, int commit_ID);
@@ -76,7 +77,8 @@ typedef struct _command {
 } COMMAND;
 
 COMMAND commands[] = {{"init", &run_init}, {"config", &run_config}, {"add", &run_add}, {"branch", &run_branch}, {"log", &run_log}, {"pre-commit", &run_pre_commit}, 
-{"commit", &run_commit}, {"grep", &run_grep}};
+{"commit", &run_commit}, {"grep", &run_grep}, {"set", &configure_commit_message_shortcut}, {"replace", &configure_commit_message_shortcut}, 
+{"remove", &configure_commit_message_shortcut}};
 
 // Definition of functions
 
@@ -96,7 +98,7 @@ void replace_characters_in_string(char* string, char to_replace, char replace_wi
     }
 }
 
-int insert_or_delete(FILE* file, char* absolute_path, char** lines, int* number_of_lines, int number_of_tabs, char* token, char* value_to_insert, char line[MAX_LINE_LENGTH], char* _Mode) {
+int insert_or_delete(FILE* file, char* absolute_path, char** lines, int* number_of_lines, int number_of_tabs, char* token, const char* value_to_insert, char line[MAX_LINE_LENGTH], const char* _Mode) {
     int new_num_lines = *number_of_lines;
     // printf("we're in insert_or_delete funct.\n");
     bool EOF_reached = false;
@@ -147,7 +149,7 @@ int insert_or_delete(FILE* file, char* absolute_path, char** lines, int* number_
     return 0;
 }
 
-int read_write_minigit(char* path, char* element, char line[MAX_LINE_LENGTH], char* value_to_insert, char* _Mode) {
+int read_write_minigit(const char* path, const char* element, char line[MAX_LINE_LENGTH], const char* value_to_insert, const char* _Mode) {
     // TODO : add the ability to write to this function, and other modes
     // modes: 'f' for find, 'i' for insert and edit, 'd' to delete, 'n' to go to next subitem, 't' to go to first subitem, 'c' to close file
     // If second character or _Mode is g, then it'll change global variables.
@@ -908,6 +910,46 @@ int commit_staged_file(int commit_ID, char* filepath) {
     return 0;
 }
 
+int configure_commit_message_shortcut(int argc, char* const argv[]) {
+    if (argc < 4) {
+        perror("\033[0;31minvalid command\033[0;0m");
+        return 1;
+    }
+    bool set = !strcmp(argv[1], "set");
+    bool remove = !strcmp(argv[1], "remove");
+    if (!remove && argc < 5) {
+        perror("\033[0;31minvalid command\033[0;0m");
+        return 1;
+    }
+    if (!set && strcmp(argv[1], "replace") != 0 && !remove) {
+        perror("\033[0;31minvalid command\033[0;0m");
+        return 1;
+    }
+    char* commit_message = NULL;
+    char* shortcut_name = NULL;
+    if (strcmp(argv[2], "-m") == 0) commit_message = argv[3];
+    else if (strcmp(argv[2], "-s") == 0) shortcut_name = argv[3];
+    if (!remove) {
+        if (strcmp(argv[4], "-m") == 0) commit_message = argv[5];
+        else if (strcmp(argv[4], "-s") == 0) shortcut_name = argv[5];
+    }
+    if (!commit_message && !remove || !shortcut_name) return 1;
+    char line[MAX_LINE_LENGTH];
+    char element[MAX_LINE_LENGTH] = "commit shortcuts.";
+    strcat(element, shortcut_name);
+    bool exist = !read_write_minigit("config", element, line, NULL, "f");
+    if (!exist && !set) {
+        perror("commit shortcut doesn't exist.");
+        return 1;
+    }
+    if (exist && set) {
+        perror("to replace commit shortcut use replace command");
+        return 1;
+    }
+    if (!remove) return read_write_minigit("config", element, line, commit_message, "i");
+    else return read_write_minigit("config", element, line, NULL, "d");
+}
+
 bool has_wildcard_format(char* _Str, char* _Format) {
     while (true) {
         if (*_Format != '*') {
@@ -1011,9 +1053,9 @@ bool is_tracked(char *filepath) {
     return false;
 }
 
-/*int create_commit_file(int commit_ID, char *message) {
+int create_commit_file(int commit_ID, char *message) {
     char commit_filepath[MAX_FILENAME_LENGTH];
-    strcpy(commit_filepath, ".neogit/commits/");
+    strcpy(commit_filepath, "." PROGRAM_NAME "\\commits\\");
     char tmp[10];
     sprintf(tmp, "%d", commit_ID);
     strcat(commit_filepath, tmp);
@@ -1041,7 +1083,7 @@ bool is_tracked(char *filepath) {
     return 0;
 }
 
-int find_file_last_commit(char* filepath) {
+/*int find_file_last_commit(char* filepath) {
     char filepath_dir[MAX_FILENAME_LENGTH];
     strcpy(filepath_dir, ".neogit/files/");
     strcat(filepath_dir, filepath);
