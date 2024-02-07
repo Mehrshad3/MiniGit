@@ -11,9 +11,16 @@
 #define MAX_LINE_LENGTH 1000
 #define MAX_MESSAGE_LENGTH 1000
 #define MAX_PATH_LENGTH 1024 // literally it's 260, IDK why I'm setting this.
+#define MAX_WORD_SIZE 70
 
 #if MAX_FILENAME_LENGTH > MAX_PATH_LENGTH
 #error "MAX_FILENAME_LENGTH cannot be greater than MAX_PATH_LENGTH"
+#endif
+#if MAX_WORD_SIZE > MAX_LINE_LENGTH
+#error "MAX_WORD_SIZE cannot be grater than MAX_LINE_LENGTH"
+#endif
+#if MAX_WORD_SIZE > MAX_COMMIT_MESSAGE_LENGTH || MAX_WORD_SIZE > MAX_MESSAGE_LENGTH
+#error "MAX_WORD_SIZE cannot be greater than length of a message"
 #endif
 
 #define IS_WHITE_SPACE(_C) (_C == ' ' || _C == '\t' || _C == '\n' || _C == '\r' || _C == '\f' || _C == '\v')
@@ -848,6 +855,79 @@ int commit_staged_file(int commit_ID, char* filepath) {
     return 0;
 }
 
+bool has_wildcard_format(char* _Str, char* _Format) {
+    while (true) {
+        if (*_Format != '*') {
+            if (*_Format != *_Str) return false;
+            if (*_Format == '\0') return true;
+            _Str++; _Format++;
+        }
+        else {
+            char* next = strchr(_Format, '*');
+            if (next == NULL) next = _Format + strlen(_Format);
+            char word_fragment[MAX_WORD_SIZE];
+            memcpy(word_fragment, _Format + 1, (next - _Format) - 1);
+            word_fragment[next - _Format - 1] = '\0';
+            if ((_Str = strstr(_Str, word_fragment)) == NULL) return 1;
+            _Str = _Str + (next - _Format) - 1;
+            _Format = next;
+        }
+    }
+}
+
+int run_grep(int argc, char* argv[]) {
+    if (argc < 6 || strcmp(argv[2], "-f") || strcmp(argv[4], "-p")) return 1;
+    bool commit_flag = (argc > 6 && !strcmp(argv[6], "-c"));
+    if (commit_flag && argc == 7) return 1;
+    bool line_flag = (argc > 6 + 2 * (int)commit_flag);
+    if (line_flag && strcmp(argv[6 + 2 * (int)commit_flag], "-n") || argc > 6 + 2 * (int)commit_flag + (int)line_flag) return 1;
+    FILE* file = fopen(argv[3], "r");
+    if (strchr(argv[5], ' ')) {
+        perror("\033[0;31mword shouldn't contain space\033[0;0m");
+        return 1;
+    }
+    if (file == NULL) {
+        perror("\033[0;31mfile not found\033[0;0m");
+        return 1;
+    }
+    int number_of_lines = 0;
+    char line[MAX_LINE_LENGTH];
+    while (fgets(line, sizeof(line), file) != NULL) {
+        number_of_lines++;
+        bool print_this_line = false;
+        int printed_until = 0;
+        char word_delimiter[] = " ,.:;\"\'";
+        char line_copy[MAX_LINE_LENGTH];
+        strcpy(line_copy, line);
+        bool end_of_line = line_copy[strlen(line_copy) - 1] == '\n';
+        if (end_of_line) line_copy[strlen(line_copy) - 1] = '\0';
+        char* word = strtok(line_copy, word_delimiter);
+        while (word != NULL) {
+            bool color_this_word = false;
+            if (has_wildcard_format(word, argv[5])) {
+                if (!print_this_line && line_flag) {
+                    printf("\033[1;36m%3d. \033[0;0m", number_of_lines);
+                }
+                print_this_line = color_this_word = true;
+            }
+            if (print_this_line) {
+                if (word != line_copy + printed_until) {
+                    printf("%.*s", word - line_copy - printed_until, line + printed_until);
+                    printed_until = word - line_copy;
+                }
+                if (color_this_word) printf("\033[0;33m");
+                printf("%s", word);
+                if (color_this_word) printf("\033[0;0m", word);
+                printed_until += strlen(word);
+            }
+            word = strtok(NULL, word_delimiter);
+        }
+        if (print_this_line && end_of_line) printf("\n");
+    }
+    fclose(file);
+    return 0;
+}
+
 /*int track_file(char *filepath) {
     if (is_tracked(filepath)) return 0;
 
@@ -1061,6 +1141,8 @@ int main(int argc, char *argv[]) {
         run_pre_commit(argc, argv);
     } else if (strcmp(argv[1], "commit") == 0) {
         return run_commit(argc, argv);
+    } else if (strcmp(argv[1], "grep") == 0) {
+        return run_grep(argc, argv);
     }
     else {
         run_alias(argc, argv);
