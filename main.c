@@ -7,7 +7,7 @@
 #include <windows.h>
 
 #define MAX_FILENAME_LENGTH 1000
-#define MAX_COMMIT_MESSAGE_LENGTH 2000
+#define MAX_COMMIT_MESSAGE_SIZE 2000
 #define MAX_LINE_LENGTH 1000
 #define MAX_MESSAGE_LENGTH 1000
 #define MAX_PATH_LENGTH 1024 // literally it's 260, IDK why I'm setting this.
@@ -908,12 +908,12 @@ bool has_wildcard_format(char* _Str, char* _Format) {
             _Str++; _Format++;
         }
         else {
-            char* next = strchr(_Format, '*');
+            char* next = strchr(_Format + 1, '*');
             if (next == NULL) next = _Format + strlen(_Format);
             char word_fragment[MAX_WORD_SIZE];
             memcpy(word_fragment, _Format + 1, (next - _Format) - 1);
             word_fragment[next - _Format - 1] = '\0';
-            if ((_Str = strstr(_Str, word_fragment)) == NULL) return 1;
+            if ((_Str = strstr(_Str, word_fragment)) == NULL) return false;
             _Str = _Str + (next - _Format) - 1;
             _Format = next;
         }
