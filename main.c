@@ -7,7 +7,8 @@
 #include <windows.h>
 
 #define MAX_FILENAME_LENGTH 1000
-#define MAX_COMMIT_MESSAGE_SIZE 2000
+#define MAX_COMMIT_MESSAGE_LENGTH 72
+#define MAX_COMMIT_MESSAGE_SIZE (MAX_COMMIT_MESSAGE_LENGTH + 1)
 #define MAX_LINE_LENGTH 1000
 #define MAX_MESSAGE_LENGTH 1000
 #define MAX_PATH_LENGTH 1024 // literally it's 260, IDK why I'm setting this.
@@ -76,6 +77,8 @@ typedef struct _command {
 
 COMMAND commands[] = {{"init", &run_init}, {"config", &run_config}, {"add", &run_add}, {"branch", &run_branch}, {"log", &run_log}, {"pre-commit", &run_pre_commit}, 
 {"commit", &run_commit}, {"grep", &run_grep}};
+
+// Definition of functions
 
 void print_command(int argc, char * const argv[]) {
     for (int i = 0; i < argc; i++) {
@@ -774,22 +777,30 @@ int run_log(int argc, char* const argv[]) {
 
 int run_commit(int argc, char * const argv[]) {
     if (argc < 4) {
-        perror("please use the correct format");
+        perror("\033[0;31mplease use the correct format\033[0;0m");
         return 1;
     }
     
-    char message[MAX_MESSAGE_LENGTH];
+    char message[MAX_COMMIT_MESSAGE_SIZE];
     strcpy(message, argv[3]);
+
+    if (strlen(message) > MAX_COMMIT_MESSAGE_LENGTH) {
+        char error_message[MAX_MESSAGE_LENGTH];
+        sprintf(error_message, "\033[0;31mcommit message can't be more than %d characters.\033[0;0m", MAX_COMMIT_MESSAGE_LENGTH);
+        perror(error_message);
+        return 1;
+    }
 
     int commit_ID = inc_last_commit_ID();
     if (commit_ID == -1) return 1;
 
     char full_staging_path[MAX_PATH_LENGTH];
-    sprintf(full_staging_path, "%s.\\" PROGRAM_NAME "staging", proj_dir);
+    sprintf(full_staging_path, "%s\\." PROGRAM_NAME "\\staging", proj_dir);
     
     FILE *file = fopen(full_staging_path, "r");
     if (file == NULL) return 1;
     char line[MAX_LINE_LENGTH];
+    bool commited = false;
     while (fgets(line, sizeof(line), file) != NULL) {
         int length = strlen(line);
 
@@ -804,17 +815,20 @@ int run_commit(int argc, char * const argv[]) {
             strcat(dir_path, "\\." PROGRAM_NAME "\\files\\");
             strcat(dir_path, line);
             if (CreateDirectory(dir_path, NULL) == 0) return 1;
-            if (mkdir(dir_path) != 0) return 1;
             if (!SetFileAttributes(dir_path, FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_HIDDEN)) return 1;
         }
         printf("commit %s\n", line);
-        //commit_staged_file(commit_ID, line);
-        // track_file(line);
+        if (!commit_staged_file(commit_ID, line)) commited = true;
+        track_file(line);
     }
     fclose(file); 
+    if (!commited) {
+        perror("no changes added to commit");
+        return 1;
+    }
     
     // free staging
-    file = fopen(".neogit/staging", "w");
+    file = fopen("." PROGRAM_NAME "\\staging", "w");
     if (file == NULL) return 1;
     fclose(file);
 
@@ -827,17 +841,19 @@ int run_commit(int argc, char * const argv[]) {
 // returns new commit_ID
 int inc_last_commit_ID() {
     char path[MAX_PATH_LENGTH];
-    sprintf(path, "%s.\\" PROGRAM_NAME "config", proj_dir);
+    printf("salam\n");
+    sprintf(path, "%s\\." PROGRAM_NAME "\\config", proj_dir);
+    printf("%s\n", path);
     FILE *file = fopen(path, "r");
     if (file == NULL) return -1;
 
     char tmp_path[MAX_PATH_LENGTH];
-    sprintf(tmp_path, "%s.\\" PROGRAM_NAME "tmp_config", proj_dir);
+    sprintf(tmp_path, "%s\\." PROGRAM_NAME "\\tmp_config", proj_dir);
     
     FILE *tmp_file = fopen(tmp_path, "w");
     if (tmp_file == NULL) return -1;
 
-    int last_commit_ID;
+    int last_commit_ID = -1;
     char line[MAX_LINE_LENGTH];
     while (fgets(line, sizeof(line), file) != NULL) {
         if (strncmp(line, "last_commit_ID", 14) == 0) {
@@ -856,18 +872,10 @@ int inc_last_commit_ID() {
 }
 
 bool check_file_directory_exists(char *filepath) {
-    /*DIR *dir = opendir(".neogit/files");
-    struct dirent *entry;
-    if (dir == NULL) {
-        perror("Error opening current directory");
-        return 1;
-    }
-    while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_DIR && strcmp(entry->d_name, filepath) == 0) return true;
-    }
-    closedir(dir);*/
-
-    return true;
+    DWORD attributes = GetFileAttributes(filepath);
+    if (attributes == INVALID_FILE_ATTRIBUTES) return false;
+    if (attributes & FILE_ATTRIBUTE_DIRECTORY) return true;
+    return false;
 }
 
 int commit_staged_file(int commit_ID, char* filepath) {
@@ -877,15 +885,15 @@ int commit_staged_file(int commit_ID, char* filepath) {
     char write_path[MAX_FILENAME_LENGTH];
     strcpy(write_path, "." PROGRAM_NAME "\\files\\");
     strcat(write_path, filepath);
-    strcat(write_path, "/");
+    strcat(write_path, "\\");
     char tmp[10];
     sprintf(tmp, "%d", commit_ID);
     strcat(write_path, tmp);
 
-    read_file = fopen(read_path, "r");
+    read_file = fopen(read_path, "rb");
     if (read_file == NULL) return 1;
 
-    write_file = fopen(write_path, "w");
+    write_file = fopen(write_path, "wb");
     if (write_file == NULL) return 1;
 
     char buffer;
@@ -973,12 +981,13 @@ int run_grep(int argc, char* const argv[]) {
     return 0;
 }
 
-/*int track_file(char *filepath) {
+int track_file(char *filepath) {
     if (is_tracked(filepath)) return 0;
 
-    FILE *file = fopen(".neogit/tracks", "a");
+    FILE *file = fopen("." PROGRAM_NAME "\\tracks", "a");
     if (file == NULL) return 1;
     fprintf(file, "%s\n", filepath);
+    fclose(file);
     return 0;
 }
 
@@ -1002,7 +1011,7 @@ bool is_tracked(char *filepath) {
     return false;
 }
 
-int create_commit_file(int commit_ID, char *message) {
+/*int create_commit_file(int commit_ID, char *message) {
     char commit_filepath[MAX_FILENAME_LENGTH];
     strcpy(commit_filepath, ".neogit/commits/");
     char tmp[10];
