@@ -34,13 +34,23 @@ char proj_dir[MAX_PATH_LENGTH];
 
 void print_command(int argc, char * const argv[]);
 
+// Prototypes for main commands and some other functions
+
 int run_init(int argc, char * const argv[]);
+int run_config(int argc, char * const argv[]);
 
 int run_add(int argc, char * const argv[]);
 int add_to_staging(char *filepath, int depth);
 
 int run_reset(int argc, char * const argv[]);
 int remove_from_staging(char *filepath);
+
+int run_branch(int argc, char* const argv[]);
+
+int remove_hook(char* value_to_remove, int (*doesnt_exist)());
+int run_pre_commit(int argc, char* const argv[]);
+
+int run_log(int argc, char* const argv[]);
 
 int run_commit(int argc, char * const argv[]);
 int inc_last_commit_ID();
@@ -54,6 +64,18 @@ int find_file_last_commit(char* filepath);
 int run_checkout(int argc, char *const argv[]);
 int find_file_last_change_before_commit(char *filepath, int commit_ID);
 int checkout_file(char *filepath, int commit_ID);
+
+int run_grep(int argc, char* const argv[]);
+
+// Adding these functions to commands
+
+typedef struct _command {
+    char* name;
+    int (*function)(int argc, char* const argv[]);
+} COMMAND;
+
+COMMAND commands[] = {{"init", &run_init}, {"config", &run_config}, {"add", &run_add}, {"branch", &run_branch}, {"log", &run_log}, {"pre-commit", &run_pre_commit}, 
+{"commit", &run_commit}, {"grep", &run_grep}};
 
 void print_command(int argc, char * const argv[]) {
     for (int i = 0; i < argc; i++) {
@@ -378,6 +400,24 @@ int run_config(int argc, char* const argv[]) {
         }
     }
     if (argc == 4 + (int)global) {
+        if (strncmp(argv[2 + (int)global], "alias.", 6) == 0) {
+            char first_command[MAX_WORD_SIZE];
+            sscanf(argv[3 + (int)global], "%s", first_command);
+            bool valid_command = false;
+            for (int i = 0; i < sizeof(commands) / sizeof(COMMAND); i++) {
+                if (strcmp(first_command, commands[i].name) == 0) {
+                    valid_command = true; // We hope that it's valid
+                    break;
+                }
+            }
+            char key[MAX_LINE_LENGTH];
+            char line[MAX_LINE_LENGTH];
+            sprintf(key, "alias.%s", first_command);
+            if (!valid_command && read_write_minigit("config", key, line, NULL, "f")) {
+                perror("\033[0;31mAlias command is not valid\033[0;0m");
+                return 1;
+            }
+        }
         if (global) {
             char line[MAX_LINE_LENGTH];
             if (read_write_minigit(NULL, argv[3], line, argv[4], "ig")) return 1;
@@ -516,6 +556,42 @@ int add_to_staging(char *fullfilepath, int depth) {
     return 0;
 }
 
+/*int run_reset(int argc, char *const argv[]) {
+    // TODO: handle command in non-root directories 
+    if (argc < 3) {
+        perror("please specify a file");
+        return 1;
+    }
+    
+    return remove_from_staging(argv[2]);
+}
+
+int remove_from_staging(char *filepath) {
+    FILE *file = fopen(".neogit/staging", "r");
+    if (file == NULL) return 1;
+    
+    FILE *tmp_file = fopen(".neogit/tmp_staging", "w");
+    if (tmp_file == NULL) return 1;
+
+    char line[MAX_LINE_LENGTH];
+    while (fgets(line, sizeof(line), file) != NULL) {
+        int length = strlen(line);
+
+        // remove '\n'
+        if (length > 0 && line[length - 1] == '\n') {
+            line[length - 1] = '\0';
+        }
+
+        if (strcmp(filepath, line) != 0) fputs(line, tmp_file);
+    }
+    fclose(file);
+    fclose(tmp_file);
+
+    remove(".neogit/staging");
+    rename(".neogit/tmp_staging", ".neogit/staging");
+    return 0;
+}*/
+
 int run_alias(int argc, char* argv[]) {
     char key[MAX_LINE_LENGTH];
     char line[MAX_LINE_LENGTH];
@@ -548,7 +624,7 @@ int cat(char* prefix, char* path) {
     return 0;
 }
 
-int run_branch(int argc, char* argv[]) {
+int run_branch(int argc, char* const argv[]) {
     char path[MAX_PATH_LENGTH];
     sprintf(path, "%s\\." PROGRAM_NAME "\\branches", proj_dir);
     printf("%s\n", path);
@@ -647,47 +723,49 @@ int remove_hook(char* value_to_remove, int (*doesnt_exist)()) {
     return 0;
 }
 
-int run_log(int argc, char* argv[]) {
+int run_pre_commit(int argc, char* const argv[]) {
+    char* hooks[] = {"todo-check", "eof-blank-space", "format-check", "balance-braces", "indentation-check", "static-error-check", "file-size-check", "character-limit", "time-limit"};
+    if (argc == 2) {
+        
+    }
+    if (argc == 4 && !strcmp(argv[2], "hooks") && !strcmp(argv[3], "list")) {
+        for (int i = 0; i < sizeof(hooks) / sizeof(char*); i++) {
+            printf("%s\n", hooks[i]);
+        }
+        return 0;
+    }
+    else if (argc >= 4 && !strcmp(argv[2], "add") && !strcmp(argv[3], "hook")) {
+        if (argc == 4) {
+            perror("please specify a hook id");
+            return 1;
+        }
+        bool valid_hook = false;
+        for (int i = 0; i < sizeof(hooks) / sizeof(char*); i++) {
+            if (!strcmp(hooks[i], argv[4])) {
+                valid_hook = true;
+                break;
+            }
+        }
+        if (!valid_hook) return 1;
+        return add_to_minigit_file(argv[4], "", NULL);
+    }
+    else if (argc >= 4 && !strcmp(argv[2], "applied") && !strcmp(argv[3], "hooks")) {
+        char path[MAX_PATH_LENGTH];
+        sprintf(path, "%s\\." PROGRAM_NAME "\\hooks", proj_dir);
+        cat("", path);
+        return 0;
+    }
+    else if (argc >= 4 && !strcmp(argv[2], "remove") && !strcmp(argv[3], "hook")) {
+        remove_hook(argv[4], NULL);
+    }
+    return 1;
+}
+
+int run_log(int argc, char* const argv[]) {
     char path[MAX_PATH_LENGTH];
     sprintf(path, "%s\\.%s\\log", proj_dir, PROGRAM_NAME);
     return cat("", path);
 }
-
-/*int run_reset(int argc, char *const argv[]) {
-    // TODO: handle command in non-root directories 
-    if (argc < 3) {
-        perror("please specify a file");
-        return 1;
-    }
-    
-    return remove_from_staging(argv[2]);
-}
-
-int remove_from_staging(char *filepath) {
-    FILE *file = fopen(".neogit/staging", "r");
-    if (file == NULL) return 1;
-    
-    FILE *tmp_file = fopen(".neogit/tmp_staging", "w");
-    if (tmp_file == NULL) return 1;
-
-    char line[MAX_LINE_LENGTH];
-    while (fgets(line, sizeof(line), file) != NULL) {
-        int length = strlen(line);
-
-        // remove '\n'
-        if (length > 0 && line[length - 1] == '\n') {
-            line[length - 1] = '\0';
-        }
-
-        if (strcmp(filepath, line) != 0) fputs(line, tmp_file);
-    }
-    fclose(file);
-    fclose(tmp_file);
-
-    remove(".neogit/staging");
-    rename(".neogit/tmp_staging", ".neogit/staging");
-    return 0;
-}*/
 
 int run_commit(int argc, char * const argv[]) {
     if (argc < 4) {
@@ -772,44 +850,6 @@ int inc_last_commit_ID() {
     return last_commit_ID;
 }
 
-int run_pre_commit(int argc, char* argv[]) {
-    char* hooks[] = {"todo-check", "eof-blank-space", "format-check", "balance-braces", "indentation-check", "static-error-check", "file-size-check", "character-limit", "time-limit"};
-    if (argc == 2) {
-        
-    }
-    if (argc == 4 && !strcmp(argv[2], "hooks") && !strcmp(argv[3], "list")) {
-        for (int i = 0; i < sizeof(hooks) / sizeof(char*); i++) {
-            printf("%s\n", hooks[i]);
-        }
-        return 0;
-    }
-    else if (argc >= 4 && !strcmp(argv[2], "add") && !strcmp(argv[3], "hook")) {
-        if (argc == 4) {
-            perror("please specify a hook id");
-            return 1;
-        }
-        bool valid_hook = false;
-        for (int i = 0; i < sizeof(hooks) / sizeof(char*); i++) {
-            if (!strcmp(hooks[i], argv[4])) {
-                valid_hook = true;
-                break;
-            }
-        }
-        if (!valid_hook) return 1;
-        return add_to_minigit_file(argv[4], "", NULL);
-    }
-    else if (argc >= 4 && !strcmp(argv[2], "applied") && !strcmp(argv[3], "hooks")) {
-        char path[MAX_PATH_LENGTH];
-        sprintf(path, "%s\\." PROGRAM_NAME "\\hooks", proj_dir);
-        cat("", path);
-        return 0;
-    }
-    else if (argc >= 4 && !strcmp(argv[2], "remove") && !strcmp(argv[3], "hook")) {
-        remove_hook(argv[4], NULL);
-    }
-    return 1;
-}
-
 bool check_file_directory_exists(char *filepath) {
     /*DIR *dir = opendir(".neogit/files");
     struct dirent *entry;
@@ -875,7 +915,7 @@ bool has_wildcard_format(char* _Str, char* _Format) {
     }
 }
 
-int run_grep(int argc, char* argv[]) {
+int run_grep(int argc, char* const argv[]) {
     if (argc < 6 || strcmp(argv[2], "-f") || strcmp(argv[4], "-p")) return 1;
     bool commit_flag = (argc > 6 && !strcmp(argv[6], "-c"));
     if (commit_flag && argc == 7) return 1;
@@ -1096,10 +1136,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (strcmp(argv[1], "init") == 0) {
-        return run_init(argc, argv);
-    }
-    else if (strcmp(argv[1], "test") == 0) {
+    if (strcmp(argv[1], "test") == 0) {
         if (find_minigit_directory() != 0) {
             perror(PROGRAM_NAME " repository has'n initialized yet.");
             return 1;
@@ -1125,27 +1162,13 @@ int main(int argc, char *argv[]) {
         read_write_minigit(NULL, NULL, NULL, NULL, "c");
         return 0;
     }
-    else if (strcmp(argv[1], "config") == 0) {
-        run_config(argc, argv);
-    }
-    else if (strcmp(argv[1], "add") == 0) {
-        run_add(argc, argv);
-    }
-    else if (strcmp(argv[1], "branch") == 0) {
-        run_branch(argc, argv);
-    }
-    else if (strcmp(argv[1], "log") == 0) {
-        run_log(argc, argv);
-    }
-    else if (strcmp(argv[1], "pre-commit") == 0) {
-        run_pre_commit(argc, argv);
-    } else if (strcmp(argv[1], "commit") == 0) {
-        return run_commit(argc, argv);
-    } else if (strcmp(argv[1], "grep") == 0) {
-        return run_grep(argc, argv);
-    }
     else {
-        run_alias(argc, argv);
+        for (int i = 0; i < sizeof(commands) / sizeof(COMMAND); i++) {
+            if (strcmp(argv[1], commands[i].name) == 0) {
+                return (*commands[i].function)(argc, argv);
+            }
+        }
+        return run_alias(argc, argv);
     }
     /*} else if (strcmp(argv[1], "reset") == 0) {
         return run_reset(argc, argv);
