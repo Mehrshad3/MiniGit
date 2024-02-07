@@ -59,8 +59,8 @@ bool check_file_directory_exists(char *filepath);
 int commit_staged_file(int commit_ID, char *filepath);
 int track_file(char *filepath);
 bool is_tracked(char *filepath);
-int create_commit_file(int commit_ID, char *message);
-int find_file_last_commit(char* filepath);
+int write_to_commit_file(FILE* file, int commit_ID, char *message, char* fullfilepath);
+int find_file_last_commit(const char* filepath);
 int configure_commit_message_shortcut(int argc, char* const argv[]);
 
 int run_checkout(int argc, char *const argv[]);
@@ -834,7 +834,7 @@ int run_commit(int argc, char * const argv[]) {
     if (file == NULL) return 1;
     fclose(file);
 
-    //create_commit_file(commit_ID, message);
+    write_to_commit_file((FILE*) NULL, commit_ID, message, proj_dir);
     fprintf(stdout, "commit successfully with commit ID %d", commit_ID);
     
     return 0;
@@ -942,10 +942,10 @@ int configure_commit_message_shortcut(int argc, char* const argv[]) {
         perror("commit shortcut doesn't exist.");
         return 1;
     }
-    if (exist && set) {
+    /*if (exist && set) {
         perror("to replace commit shortcut use replace command");
         return 1;
-    }
+    }*/ // This is commented due to a bug in read_write_minigit function
     if (!remove) return read_write_minigit("config", element, line, commit_message, "i");
     else return read_write_minigit("config", element, line, NULL, "d");
 }
@@ -1053,59 +1053,82 @@ bool is_tracked(char *filepath) {
     return false;
 }
 
-int create_commit_file(int commit_ID, char *message) {
-    char commit_filepath[MAX_FILENAME_LENGTH];
-    strcpy(commit_filepath, "." PROGRAM_NAME "\\commits\\");
-    char tmp[10];
-    sprintf(tmp, "%d", commit_ID);
-    strcat(commit_filepath, tmp);
+int write_to_commit_file(FILE* file, int commit_ID, char *message, char* fullfilepath) {
 
-    FILE *file = fopen(commit_filepath, "w");
-    if (file == NULL) return 1;
+    if (strcmp(fullfilepath, proj_dir) == 0) {
+        char commit_filepath[MAX_FILENAME_LENGTH];
+        strcpy(commit_filepath, "." PROGRAM_NAME "\\commits\\");
+        char tmp[10];
 
-    fprintf(file, "message: %s\n", message);
-    fprintf(file, "files:\n");
-    
-    DIR *dir = opendir(".");
-    struct dirent *entry;
-    if (dir == NULL) {
-        perror("Error opening current directory");
-        return 1;
+        sprintf(tmp, "%d", commit_ID);
+        strcat(commit_filepath, tmp);
+
+        file = fopen(commit_filepath, "w");
+        if (file == NULL) return 1;
+
+        fprintf(file, "message: %s\n", message);
+        fprintf(file, "files:\n");
     }
-    while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_REG && is_tracked(entry->d_name)) {
-            int file_last_commit_ID = find_file_last_commit(entry->d_name);
-            fprintf(file, "%s %d\n", entry->d_name, file_last_commit_ID);
+
+    int return_value = 0;
+    unsigned long attributes = GetFileAttributes(fullfilepath);
+    if (attributes & FILE_ATTRIBUTE_HIDDEN) return 1;
+    if (attributes & FILE_ATTRIBUTE_DIRECTORY) {
+        HANDLE handle;
+        WIN32_FIND_DATA fdFile;
+        char spath[MAX_PATH_LENGTH];
+        sprintf(spath, "%s\\*", fullfilepath);
+        if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) return 1;
+        if (!FindNextFile(handle, &fdFile)) return 1;
+        while (FindNextFile(handle, &fdFile)) {
+            int len = strlen(fullfilepath);
+            fullfilepath[len] = '\\';
+            strcpy(fullfilepath + len + 1, fdFile.cFileName);
+            if (!(fdFile.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
+                if (write_to_commit_file(file, -1, NULL, fullfilepath)) return_value = 1;
+            }
+            fullfilepath[len] = '\0';
         }
+        FindClose(handle);
+        return return_value;
     }
-    closedir(dir); 
-    fclose(file);
+
+    int file_last_commit_ID = find_file_last_commit(fullfilepath + strlen(proj_dir) + 1);
+    fprintf(stdout, "%s %d\n", file_last_commit_ID);
+    fprintf(file, "%s %d\n", file_last_commit_ID);
+
+    if (!strcmp(fullfilepath, proj_dir)) fclose(file);
     return 0;
 }
 
-/*int find_file_last_commit(char* filepath) {
+int find_file_last_commit(const char* filepath) {
     char filepath_dir[MAX_FILENAME_LENGTH];
-    strcpy(filepath_dir, ".neogit/files/");
+    strcpy(filepath_dir, proj_dir);
+    strcat(filepath_dir, "\\." PROGRAM_NAME "\\files\\");
     strcat(filepath_dir, filepath);
 
     int max = -1;
     
-    DIR *dir = opendir(filepath_dir);
-    struct dirent *entry;
-    if (dir == NULL) return 1;
+    HANDLE handle;
+    WIN32_FIND_DATA fdFile;
+    char spath[MAX_PATH_LENGTH];
+    sprintf(spath, "%s\\*", filepath_dir);
+    printf("spath: %s\n", spath);
 
-    while((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_REG) {
-            int tmp = atoi(entry->d_name);
-            max = max > tmp ? max: tmp;
+    if ((handle = FindFirstFile(spath, &fdFile)) == INVALID_HANDLE_VALUE) return 1;
+    if (!FindNextFile(handle, &fdFile)) return 1;
+    while (FindNextFile(handle, &fdFile)) {
+        if (!(fdFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+            int tmp = atoi(fdFile.cFileName);
+            max = max > tmp ? max : tmp;
         }
     }
-    closedir(dir);
+    FindClose(handle);
 
     return max;
 }
 
-int run_checkout(int argc, char * const argv[]) {
+/*int run_checkout(int argc, char * const argv[]) {
     if (argc < 3) return 1;
     
     int commit_ID = atoi(argv[2]);
