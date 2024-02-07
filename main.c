@@ -402,17 +402,22 @@ int run_config(int argc, char* const argv[]) {
     if (argc == 4 + (int)global) {
         if (strncmp(argv[2 + (int)global], "alias.", 6) == 0) {
             char first_command[MAX_WORD_SIZE];
-            sscanf(argv[3 + (int)global], "%s", first_command);
+            char second_command[MAX_WORD_SIZE];
+            sscanf(argv[3 + (int)global], "%s %s", first_command, second_command);
+            if (strcmp(first_command, "main") && strcmp(first_command, PROGRAM_NAME)) {
+                perror("\033[0;31mAlias command is not valid\033[0;0m");
+                return 1;
+            }
             bool valid_command = false;
             for (int i = 0; i < sizeof(commands) / sizeof(COMMAND); i++) {
-                if (strcmp(first_command, commands[i].name) == 0) {
+                if (strcmp(second_command, commands[i].name) == 0) {
                     valid_command = true; // We hope that it's valid
                     break;
                 }
             }
             char key[MAX_LINE_LENGTH];
             char line[MAX_LINE_LENGTH];
-            sprintf(key, "alias.%s", first_command);
+            sprintf(key, "alias.%s", second_command);
             if (!valid_command && read_write_minigit("config", key, line, NULL, "f")) {
                 perror("\033[0;31mAlias command is not valid\033[0;0m");
                 return 1;
